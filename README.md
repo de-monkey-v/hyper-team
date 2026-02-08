@@ -2,6 +2,8 @@
 
 A collection of Claude Code plugins for power users. Install individually or use them all together.
 
+**Documentation**: https://de-monkey-v.github.io/hyper-team/
+
 ## Plugins
 
 | Plugin | Description | Setup |

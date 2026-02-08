@@ -5,3 +5,13 @@ __pycache__/
 .log/
 .playwright-mcp/
 *.png
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Credentials
+*.pem
+*.key
+*.p12
