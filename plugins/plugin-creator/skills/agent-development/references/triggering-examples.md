@@ -137,6 +137,68 @@ Direct security analysis request triggers the security-analyzer agent.
 </example>
 ```
 
+## Description 예제 vs Body 예제 구분
+
+에이전트에는 두 종류의 `<example>` 블록이 있으며, 각각 다른 목적을 가집니다:
+
+### 1. Description 내 `<example>` (트리거링용)
+
+**위치**: frontmatter의 `description` 필드 내
+**목적**: Claude가 에이전트를 언제 실행할지 판단하는 데 사용
+
+```markdown
+description: Use this agent when... Examples:
+
+<example>
+Context: User just wrote authentication code
+user: "Check my auth code"
+assistant: "I'll use the security-analyzer agent."
+<commentary>
+Auth code triggers security review.
+</commentary>
+</example>
+```
+
+**특징:**
+- Claude의 에이전트 선택 로직에 직접 영향
+- 간결하게 유지 (3-4개)
+- 사용자 메시지 → 에이전트 호출 흐름을 보여줌
+
+### 2. Body 내 `<examples>` (행동 가이드용)
+
+**위치**: 에이전트 시스템 프롬프트 본문의 `<examples>` 태그 내
+**목적**: 에이전트가 실행된 후 어떻게 작업을 수행할지 가이드
+
+```markdown
+<examples>
+<example>
+<scenario>TypeScript 프로젝트에서 인증 로직 보안 분석 요청</scenario>
+<approach>
+1. 인증 관련 파일 식별 (auth/, middleware/)
+2. JWT 검증, 세션 관리, CSRF 방어 점검
+3. OWASP 인증 가이드라인 대조
+</approach>
+<output>보안 분석 보고서: Critical 0, Major 2 (세션 만료 미설정, CSRF 토큰 미적용)</output>
+<commentary>인증 코드는 OWASP 가이드라인을 기준으로 분석합니다.</commentary>
+</example>
+</examples>
+```
+
+**특징:**
+- 에이전트의 작업 방식과 출력 품질을 결정
+- 다양한 시나리오 커버 (단순, 복잡, 엣지 케이스)
+- 3-5개 권장
+
+### 구분 요약
+
+| 항목 | Description `<example>` | Body `<examples>` |
+|------|------------------------|-------------------|
+| 위치 | frontmatter description | 시스템 프롬프트 본문 |
+| 목적 | 언제 에이전트를 실행할지 | 어떻게 작업을 수행할지 |
+| 형식 | Context/user/assistant/commentary | scenario/approach/output/commentary |
+| 수량 | 2-4개 | 3-5개 |
+| 영향 | 에이전트 선택 | 작업 품질 |
+
 ### Type 2: Proactive Triggering
 
 Agent triggers after relevant work without explicit request:

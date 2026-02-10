@@ -164,39 +164,51 @@ The markdown body becomes the agent's system prompt. Write in second person, add
 
 ### Structure
 
-**Standard template:**
+**Standard XML-based template:**
 ```markdown
 You are [role] specializing in [domain].
 
-**Your Core Responsibilities:**
+<context>
+[Project context]
+</context>
+
+<instructions>
+## Core Responsibilities
 1. [Primary responsibility]
 2. [Secondary responsibility]
-3. [Additional responsibilities...]
 
-**Analysis Process:**
+## Process
 1. [Step one]
 2. [Step two]
 3. [Step three]
-[...]
 
-**Quality Standards:**
-- [Standard 1]
-- [Standard 2]
+## Decision Framework
+[Condition-based action guidelines]
+</instructions>
 
-**Output Format:**
-Provide results in this format:
-- [What to include]
-- [How to structure]
+<examples>
+<example>
+<input>[Input scenario]</input>
+<output>[Expected output]</output>
+<commentary>[Why this output is correct]</commentary>
+</example>
+</examples>
 
-**Edge Cases:**
-Handle these situations:
-- [Edge case 1]: [How to handle]
-- [Edge case 2]: [How to handle]
+<constraints>
+[Edge cases and don'ts]
+</constraints>
+
+<output-format>
+[Output specification]
+</output-format>
 ```
 
 ### Best Practices
 
 ✅ **DO:**
+- Use XML tags to structure prompts (`<instructions>`, `<examples>`, `<constraints>`, `<context>`, `<output-format>`)
+- Include 3-5 multishot examples within `<examples>` tags
+- Write specific persona (domain, experience, specialization - not just "expert reviewer")
 - Write in second person ("You are...", "You will...")
 - Be specific about responsibilities
 - Provide step-by-step process

@@ -157,6 +157,12 @@ Follow the **Skill → Agent → Command** pattern:
 2. **Agents** automate tasks using skills (agent .md files)
 3. **Commands** provide user entry points that orchestrate agents
 
+### Prompt Engineering
+Plugin-creator follows Anthropic's prompt engineering guidelines:
+- **XML Tags**: Agent prompts use `<instructions>`, `<examples>`, `<constraints>` tags
+- **Structured Data Transfer**: Commands pass data to agents via XML `<task-context>` tags
+- **Multishot Examples**: Agent system prompts include 3-5 example scenarios
+
 ### Plugin Structure
 ```
 my-plugin/
@@ -197,6 +203,12 @@ my-plugin/
 1. **Skills** - 지식과 가이드라인 정의 (SKILL.md 파일)
 2. **Agents** - 스킬을 활용한 작업 자동화 (에이전트 .md 파일)
 3. **Commands** - 에이전트를 조율하는 사용자 진입점
+
+### 프롬프트 엔지니어링
+Plugin-creator는 Anthropic 공식 프롬프트 엔지니어링 가이드라인을 따릅니다:
+- **XML 태그**: 에이전트 프롬프트에 `<instructions>`, `<examples>`, `<constraints>` 태그 사용
+- **구조화된 데이터 전달**: 커맨드에서 에이전트로 XML `<task-context>` 태그로 데이터 전달
+- **멀티샷 예제**: 에이전트 시스템 프롬프트에 3-5개 예제 시나리오 포함
 
 ### 플러그인 구조
 ```

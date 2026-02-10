@@ -149,13 +149,14 @@ Task tool:
 - subagent_type: "plugin-creator:plan-designer"
 - description: "Interactive plan design"
 - prompt: |
-    The user wants to create the following:
+    <task-context>
+    <request>$ARGUMENTS</request>
+    <mode>{project or plugin}</mode>
+    <location>{Project Mode: ./.claude/ | Plugin Mode: selected path above}</location>
+    <type>create</type>
+    </task-context>
 
-    **Request:** $ARGUMENTS
-    **Mode:** {project or plugin}
-    **Location:** {Project Mode: ./.claude/ | Plugin Mode: selected path above}
-    **Type:** create (new creation)
-
+    <instructions>
     Design the plan interactively like a Plan agent:
 
     1. **Discovery Phase**: Ask only relevant questions via AskUserQuestion
@@ -184,6 +185,7 @@ Task tool:
 
     **CRITICAL**: Continue the conversation until the user explicitly says "save", "approve", or "looks good".
     **CRITICAL**: You MUST save the plan file using the Write tool and return the path.
+    </instructions>
 ```
 
 **Handling plan-designer results:**
@@ -205,11 +207,13 @@ Task tool:
 - subagent_type: "claude-code-guide"
 - description: "Plan specification validation"
 - prompt: |
-    Verify that the following plugin plan conforms to Claude Code official specifications:
+    <task-context>
+    <plan-file>{path returned by plan-designer}</plan-file>
+    <validation-type>specification</validation-type>
+    </task-context>
 
-    **Plan file:** {path returned by plan-designer}
-
-    Check items:
+    <instructions>
+    Verify that the plan conforms to Claude Code official specifications:
     - Skill frontmatter format (description required)
     - Agent frontmatter required fields (name, description)
     - Agent does not include Task tool (agents cannot call other agents)
@@ -218,6 +222,7 @@ Task tool:
 
     If there are issues, provide the corrections needed.
     If no issues, respond with "Specification validation passed".
+    </instructions>
 ```
 
 ### Step 2: Handle Validation Results
@@ -312,39 +317,78 @@ Task tool:
 - subagent_type: "plugin-creator:skill-creator"
 - description: "Create {skill-name} skill"
 - prompt: |
-    **Plugin path:** {plugin-path}
-    **Skill name:** {skill-name}
-    **Purpose:** {specification from plan file}
-    Please create the skill files.
+    <task-context>
+    <plugin-path>{plugin-path}</plugin-path>
+    <component-name>{skill-name}</component-name>
+    <mode>{project or plugin}</mode>
+    </task-context>
+
+    <specification>
+    {skill specification extracted from plan file}
+    </specification>
+
+    <instructions>
+    Create the skill files according to the specification above.
+    Follow XML-structured prompt patterns for any generated content.
+    </instructions>
 
 2. Create Agents (after skills)
 Task tool:
 - subagent_type: "plugin-creator:agent-creator"
 - description: "Create {agent-name} agent"
 - prompt: |
-    **Plugin path:** {plugin-path}
-    **Agent name:** {agent-name}
-    **Purpose:** {specification from plan file}
-    Please create the agent file.
+    <task-context>
+    <plugin-path>{plugin-path}</plugin-path>
+    <component-name>{agent-name}</component-name>
+    <mode>{project or plugin}</mode>
+    </task-context>
+
+    <specification>
+    {agent specification extracted from plan file}
+    </specification>
+
+    <instructions>
+    Create the agent file according to the specification above.
+    Follow XML-structured prompt patterns for any generated content.
+    </instructions>
 
 3. Create Commands (after agents)
 Task tool:
 - subagent_type: "plugin-creator:command-creator"
 - description: "Create {command-name} command"
 - prompt: |
-    **Plugin path:** {plugin-path}
-    **Command name:** {command-name}
-    **Purpose:** {specification from plan file}
-    Please create the command file.
+    <task-context>
+    <plugin-path>{plugin-path}</plugin-path>
+    <component-name>{command-name}</component-name>
+    <mode>{project or plugin}</mode>
+    </task-context>
+
+    <specification>
+    {command specification extracted from plan file}
+    </specification>
+
+    <instructions>
+    Create the command file according to the specification above.
+    Follow XML-structured prompt patterns for any generated content.
+    </instructions>
 
 4. Create Hooks (if needed)
 Task tool:
 - subagent_type: "plugin-creator:hook-creator"
 - description: "Create hooks"
 - prompt: |
-    **Plugin path:** {plugin-path}
-    **Hook configuration:** {specification from plan file}
-    Please create the hooks.json file.
+    <task-context>
+    <plugin-path>{plugin-path}</plugin-path>
+    <mode>{project or plugin}</mode>
+    </task-context>
+
+    <specification>
+    {hook specification extracted from plan file}
+    </specification>
+
+    <instructions>
+    Create the hooks.json file according to the specification above.
+    </instructions>
 ```
 
 **Parallel invocation possible:**
@@ -377,12 +421,14 @@ Task tool:
 - subagent_type: "claude-code-guide"
 - description: "Validate created component formats"
 - prompt: |
+    <task-context>
+    <mode>{project or plugin}</mode>
+    <path>{.claude/ or plugin-path}</path>
+    <validation-type>format</validation-type>
+    </task-context>
+
+    <instructions>
     Validate created components against official documentation:
-
-    **Mode:** {project or plugin}
-    **Path:** {.claude/ or plugin-path}
-
-    Check items:
     - Is skill SKILL.md frontmatter format correct?
     - Do agent .md frontmatter have required fields? (name, description)
     - Is command .md frontmatter format correct? (description, allowed-tools)
@@ -390,6 +436,7 @@ Task tool:
     - Do agents NOT contain Task tool?
 
     If there are issues, provide fix instructions.
+    </instructions>
 ```
 
 ### Step 2: Structure Validation via plugin-validator (Plugin Mode only)
@@ -401,14 +448,21 @@ Task tool:
 - subagent_type: "plugin-creator:plugin-validator"
 - description: "Plugin validation"
 - prompt: |
-    **Plugin path:** {created plugin path}
+    <task-context>
+    <plugin-path>{created plugin path}</plugin-path>
+    <validation-scope>full</validation-scope>
+    </task-context>
 
+    <instructions>
     Validate the following:
     - Manifest validity (plugin.json)
     - Directory structure
     - Each component format
     - Naming conventions
     - Skill → Agent → Command pattern compliance
+
+    Provide detailed report with fix suggestions for each issue.
+    </instructions>
 ```
 
 ### Step 3: Handle Results

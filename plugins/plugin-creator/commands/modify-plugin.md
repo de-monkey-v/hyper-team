@@ -162,14 +162,15 @@ Task tool:
 - subagent_type: "plugin-creator:plan-designer"
 - description: "Interactive modification plan design"
 - prompt: |
-    Modifying existing components:
+    <current-state>
+    <mode>{project or plugin}</mode>
+    <path>{Project Mode: ./.claude/ | Plugin Mode: confirmed plugin path}</path>
+    <user-request>$ARGUMENTS</user-request>
+    <type>modify</type>
+    </current-state>
 
-    **Mode:** {project or plugin}
-    **Path:** {Project Mode: ./.claude/ | Plugin Mode: confirmed plugin path}
-    **User request:** $ARGUMENTS
-    **Type:** modify (existing modification)
-
-    Design the modification plan interactively like a Plan agent:
+    <instructions>
+    Design the modification plan interactively:
 
     0. **Analysis Phase**: Analyze current structure
        - Project Mode: scan components in .claude/
@@ -212,6 +213,7 @@ Task tool:
 
     **CRITICAL**: Continue the conversation until the user explicitly says "save", "approve", or "looks good".
     **CRITICAL**: You MUST save the plan file using the Write tool and return the path.
+    </instructions>
 ```
 
 **Handling plan-designer results:**
@@ -233,11 +235,13 @@ Task tool:
 - subagent_type: "claude-code-guide"
 - description: "Modification plan specification validation"
 - prompt: |
-    Verify that the following plugin modification plan conforms to Claude Code official specifications:
+    <task-context>
+    <plan-file>{path returned by plan-designer}</plan-file>
+    <validation-type>specification</validation-type>
+    </task-context>
 
-    **Plan file:** {path returned by plan-designer}
-
-    Check items:
+    <instructions>
+    Verify that the modification plan conforms to Claude Code official specifications:
     - Skill frontmatter format (description required)
     - Agent frontmatter required fields (name, description)
     - Agent does not include Task tool (agents cannot call other agents)
@@ -246,6 +250,7 @@ Task tool:
 
     If there are issues, provide the corrections needed.
     If no issues, respond with "Specification validation passed".
+    </instructions>
 ```
 
 ### Step 2: Handle Validation Results
@@ -327,10 +332,20 @@ Task tool:
 - subagent_type: "plugin-creator:{component}-creator"
 - description: "Create {component-name}"
 - prompt: |
-    **Plugin path:** {plugin-path}
-    **Component name:** {component-name}
-    **Purpose:** {specification from plan file}
-    Please create the component file.
+    <task-context>
+    <plugin-path>{plugin-path}</plugin-path>
+    <component-name>{component-name}</component-name>
+    <mode>{project or plugin}</mode>
+    </task-context>
+
+    <specification>
+    {component specification extracted from plan file}
+    </specification>
+
+    <instructions>
+    Create the component file according to the specification above.
+    Follow XML-structured prompt patterns for any generated content.
+    </instructions>
 ```
 
 **Task order:**
@@ -365,13 +380,15 @@ Task tool:
 - subagent_type: "claude-code-guide"
 - description: "Validate modified component formats"
 - prompt: |
+    <task-context>
+    <mode>{project or plugin}</mode>
+    <path>{.claude/ or plugin-path}</path>
+    <modified-components>{modified-components}</modified-components>
+    <validation-type>format</validation-type>
+    </task-context>
+
+    <instructions>
     Validate modified components against official documentation:
-
-    **Mode:** {project or plugin}
-    **Path:** {.claude/ or plugin-path}
-    **Modified components:** {modified-components}
-
-    Check items:
     - Is skill SKILL.md frontmatter format correct?
     - Do agent .md frontmatter have required fields? (name, description)
     - Is command .md frontmatter format correct? (description, allowed-tools)
@@ -379,6 +396,7 @@ Task tool:
     - Do agents NOT contain Task tool?
 
     If there are issues, provide fix instructions.
+    </instructions>
 ```
 
 ### Step 2: Structure Validation via plugin-validator (Plugin Mode only)
@@ -390,13 +408,20 @@ Task tool:
 - subagent_type: "plugin-creator:plugin-validator"
 - description: "Plugin validation"
 - prompt: |
-    **Plugin path:** {plugin path}
+    <task-context>
+    <plugin-path>{plugin path}</plugin-path>
+    <validation-scope>modified-components</validation-scope>
+    </task-context>
 
+    <instructions>
     Validate the following:
     - Modified component formats
     - Impact on existing components (regression)
     - Reference integrity
     - Skill → Agent → Command pattern compliance
+
+    Provide detailed report with fix suggestions for each issue.
+    </instructions>
 ```
 
 ### Step 3: Handle Results

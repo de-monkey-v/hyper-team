@@ -56,6 +56,94 @@ Phase 3: Launch performance-auditor agent for optimization check
 Phase 4: Compile findings into unified report
 ```
 
+## XML 구조화된 에이전트 연동
+
+### XML 데이터 전달 패턴
+
+커맨드에서 에이전트를 호출할 때 XML 태그로 구조화된 데이터를 전달합니다:
+
+```markdown
+---
+description: Deep code review with structured data
+argument-hint: [file-path]
+allowed-tools: Read, Task
+---
+
+Task tool prompt for code-reviewer agent:
+
+<task-context>
+<target-file>@$1</target-file>
+<review-scope>security, performance, best-practices</review-scope>
+<project-standards>CLAUDE.md</project-standards>
+</task-context>
+
+<specification>
+Agent uses plugin resources:
+- ${CLAUDE_PLUGIN_ROOT}/config/rules.json
+- ${CLAUDE_PLUGIN_ROOT}/checklists/review.md
+</specification>
+
+<instructions>
+Perform comprehensive review of the target file.
+Follow project standards and checklist.
+Report findings in the standard output format.
+</instructions>
+```
+
+### Multi-Agent XML 워크플로우
+
+```markdown
+---
+description: Full review workflow with XML handoff
+argument-hint: [file]
+allowed-tools: Read, Task
+---
+
+Phase 1: Structural Analysis
+Task tool:
+<task-context>
+<target>@$1</target>
+<phase>structural-analysis</phase>
+</task-context>
+<instructions>Analyze code structure and architecture.</instructions>
+
+Phase 2: Security Scan (receives Phase 1 context)
+Task tool:
+<task-context>
+<target>@$1</target>
+<phase>security-scan</phase>
+<prior-analysis>{Phase 1 results}</prior-analysis>
+</task-context>
+<instructions>Scan for vulnerabilities, considering structural analysis.</instructions>
+
+Phase 3: Compile findings into unified report
+```
+
+### Long Context 원칙
+
+긴 데이터는 TOP에, 짧은 지시사항은 BOTTOM에 배치합니다:
+
+```markdown
+Task tool prompt:
+<current-state>
+{긴 현재 상태 분석 결과}
+</current-state>
+
+<specification>
+{plan에서 추출한 상세 명세}
+</specification>
+
+<instructions>
+{짧은 지시사항}
+</instructions>
+```
+
+**Key points:**
+- Use `<task-context>` for metadata (file paths, modes, scopes)
+- Use `<specification>` for detailed requirements
+- Use `<instructions>` for action directives (keep SHORT, place at BOTTOM)
+- Use `<current-state>` or `<prior-analysis>` for context from previous phases
+
 ## Skill Integration
 
 Commands can leverage plugin skills for specialized knowledge.

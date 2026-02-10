@@ -28,8 +28,24 @@ Find the plugin root by looking for `.claude-plugin/plugin.json`:
 Use the plugin-validator agent for comprehensive validation:
 
 ```
-Launch plugin-validator agent with:
-"Validate the plugin at [path]. Check manifest, structure, naming, components, and security."
+Task tool:
+- subagent_type: "plugin-creator:plugin-validator"
+- description: "Validate plugin structure and components"
+- prompt: |
+    <task-context>
+    <plugin-path>$ARGUMENTS (or detected path)</plugin-path>
+    <validation-scope>full</validation-scope>
+    </task-context>
+
+    <instructions>
+    Perform comprehensive plugin validation:
+    - Manifest validity (plugin.json)
+    - Directory structure
+    - Each component format (skills, agents, commands, hooks)
+    - Naming conventions
+    - Security checks
+    Provide detailed report with fix suggestions for each issue.
+    </instructions>
 ```
 
 ### Step 3: Review Results

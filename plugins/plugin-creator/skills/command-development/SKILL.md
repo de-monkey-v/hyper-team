@@ -203,17 +203,33 @@ Generate documentation for @$1 including:
 - Usage examples
 ```
 
-### Orchestration Pattern (Multi-Agent)
+### Orchestration Pattern with XML Data Transfer
 ```markdown
 ---
 description: Complete workflow with agents
 argument-hint: [target]
 allowed-tools: Read, Write, Bash, AskUserQuestion, Task, Skill
 ---
+
+<task-context>
+<target>$ARGUMENTS</target>
+<mode>analysis</mode>
+</task-context>
+
 Phase 1: Load relevant skill for knowledge
-Phase 2: Launch analyzer agent via Task tool
-Phase 3: Launch reviewer agent via Task tool
-Phase 4: Compile results
+Phase 2: Launch analyzer agent via Task tool with structured data:
+
+Task tool prompt:
+<task-context>
+<target-path>{path}</target-path>
+<analysis-type>{type}</analysis-type>
+</task-context>
+
+<instructions>
+Analyze the target following the specification above.
+</instructions>
+
+Phase 3: Compile results
 ```
 
 **Note:** `Task` enables agent launching, `Skill` enables skill loading.
@@ -225,6 +241,8 @@ Phase 4: Compile results
 - Use `argument-hint` to document expected args
 - Specify `allowed-tools` when restricting access
 - Use `${CLAUDE_PLUGIN_ROOT}` for plugin paths
+- Use XML tags when passing data to agents via Task tool
+- Place long context data at TOP, instructions at BOTTOM
 - Keep commands focused on single tasks
 
 ❌ **DON'T:**

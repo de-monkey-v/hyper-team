@@ -24,7 +24,7 @@
 
 ### 명시적 위임 패턴
 
-커맨드에서 에이전트를 호출할 때는 **명시적으로** 작성합니다:
+커맨드에서 에이전트를 호출할 때는 **명시적으로** 작성하며, XML 태그로 데이터를 구조화하여 전달합니다:
 
 ```markdown
 ## Phase N: 컴포넌트 생성
@@ -35,11 +35,22 @@
 
 1. **skill-creator 에이전트에게 위임**:
 
-   다음 정보를 전달하여 스킬 생성 요청:
-   - 스킬 이름: `{skill-name}`
-   - 목적: {description}
-   - 트리거 구문: {trigger phrases}
-   - 필요한 리소스: references/, examples/
+   Task tool prompt:
+   ```
+   <task-context>
+   <skill-name>{skill-name}</skill-name>
+   <trigger-phrases>{trigger phrases}</trigger-phrases>
+   <resources>references/, examples/</resources>
+   </task-context>
+
+   <specification>
+   {description}
+   </specification>
+
+   <instructions>
+   위 명세에 따라 스킬을 생성하세요.
+   </instructions>
+   ```
 
    **기대 출력**:
    - `skills/{skill-name}/SKILL.md`
@@ -76,6 +87,64 @@
 
 **Output**: 완성된 에이전트 파일
 ```
+
+## XML 핸드오프 패턴
+
+커맨드에서 에이전트를 호출할 때 XML 태그로 구조화된 데이터를 전달합니다.
+
+### 기본 XML 데이터 전달
+
+```markdown
+## Phase N: 컴포넌트 생성
+
+**Goal**: 스킬 파일 생성
+
+**Actions**:
+
+1. **skill-creator 에이전트에게 위임**:
+
+   Task tool prompt:
+   ```
+   <task-context>
+   <plugin-path>{plugin-path}</plugin-path>
+   <component-name>{name}</component-name>
+   <mode>{project or plugin}</mode>
+   </task-context>
+
+   <specification>
+   {plan 파일에서 추출한 상세 명세}
+   </specification>
+
+   <instructions>
+   위 명세에 따라 컴포넌트를 생성하세요.
+   XML 구조화된 프롬프트 패턴을 따르세요.
+   </instructions>
+   ```
+
+   **기대 출력**:
+   - `skills/{skill-name}/SKILL.md`
+   - 지원 파일들
+```
+
+### Long Context 원칙
+
+긴 데이터(plan, 현재 상태 분석 등)는 **TOP**에, 지시사항은 **BOTTOM**에 배치합니다:
+
+```
+<current-state>
+{현재 플러그인 구조 분석 결과 - 긴 데이터}
+</current-state>
+
+<specification>
+{plan에서 추출한 명세 - 긴 데이터}
+</specification>
+
+<instructions>
+{짧은 지시사항은 마지막에}
+</instructions>
+```
+
+---
 
 ## 스킬 로드 패턴
 
@@ -326,9 +395,11 @@ Phase 4 (Completion)
 ### DO ✅
 
 1. **명시적 위임**: 에이전트에게 무엇을 전달하고 무엇을 기대하는지 명확히
-2. **결정 지점**: 중요한 단계마다 사용자 확인
-3. **오류 처리**: 실패 시나리오 고려
-4. **간결함**: 필요한 최소한의 Phase만 유지
+2. **XML 데이터 전달**: 에이전트에게 데이터를 전달할 때 XML 태그로 구조화
+3. **Long Context 원칙**: 긴 데이터는 TOP에, 지시사항은 BOTTOM에
+4. **결정 지점**: 중요한 단계마다 사용자 확인
+5. **오류 처리**: 실패 시나리오 고려
+6. **간결함**: 필요한 최소한의 Phase만 유지
 
 ### DON'T ❌
 

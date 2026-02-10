@@ -140,6 +140,36 @@ AskUserQuestion:
 ---
 ```
 
+**XML Data Transfer Pattern (for agent delegation):**
+```markdown
+## Phase N: [Agent Delegation Phase]
+
+**Goal**: [One-sentence goal]
+
+**Actions**:
+
+### N.1 Delegate to {agent-name}
+
+Task tool:
+- subagent_type: "{agent-name}"
+- description: "{brief description}"
+- prompt: |
+    <task-context>
+    <target>{target from $ARGUMENTS}</target>
+    <context>{relevant context}</context>
+    </task-context>
+
+    <specification>
+    {detailed specification for the agent}
+    </specification>
+
+    <instructions>
+    Execute the task according to the specification above.
+    </instructions>
+
+**Output**: [Expected output from agent]
+```
+
 ### 2.3 Important Notes Section
 
 ```markdown
@@ -227,8 +257,24 @@ Load `plugin-creator:skill-development` skill.
 ### Agent Delegation Pattern
 ```markdown
 **Delegate to skill-creator agent**:
-- Information to pass: skill name, purpose, triggers
-- Expected output: skills/{name}/SKILL.md
+Task tool:
+- subagent_type: "plugin-creator:skill-creator"
+- description: "Create skill with XML-structured data transfer"
+- prompt: |
+    <task-context>
+    <plugin-path>{path}</plugin-path>
+    <skill-name>{name}</skill-name>
+    </task-context>
+
+    <specification>
+    Purpose: {purpose}
+    Triggers: {triggers}
+    </specification>
+
+    <instructions>
+    Create the skill files according to the specification above.
+    Expected output: skills/{name}/SKILL.md
+    </instructions>
 ```
 
 ### User Confirmation Pattern
