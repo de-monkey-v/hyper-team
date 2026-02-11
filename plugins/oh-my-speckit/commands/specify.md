@@ -45,7 +45,7 @@ Phase 5: 팀 해산 + 완료 안내
 | 0 | 4 | 태스크 등록 | TaskCreate |
 | 1 | 1 | 팀 생성 | TeamCreate |
 | 1 | 2 | role-templates 참조하여 팀 구성 판단 | Skill |
-| 1 | 3 | 팀메이트 생성 (researcher, explorer 등) | Task (team_name) |
+| 1 | 3 | 팀메이트 생성 (pm, architect 등) | Task (team_name) |
 | 4 | 2 | 사용자 승인 후 파일 저장 | Write |
 | 5 | 1 | 팀 해산 | SendMessage (shutdown), TeamDelete |
 
@@ -98,15 +98,37 @@ Read tool:
 
 ### Step 2.6: Spec ID 결정
 
-기존 specs 디렉토리에서 다음 ID 결정:
+기존 specs 디렉토리에서 다음 ID를 결정한다. 아래 알고리즘을 **정확히** 따를 것:
+
+**1) 기존 spec 디렉토리 목록 조회:**
 
 ```
 Glob tool:
-- pattern: "${PROJECT_ROOT}/.specify/specs/*/spec.md"
+- pattern: "${PROJECT_ROOT}/.specify/specs/*"
 ```
 
-기존 spec 번호 파악 후 다음 번호 할당. 없으면 `001` 시작.
-사용자 요청에서 기능명 추출하여 `{NNN}-{feature-name}` 형식으로 ID 결정.
+**2) 다음 번호 계산:**
+
+- Glob 결과에서 각 디렉토리명의 **앞 3자리 숫자를 추출** (정규식: `^(\d{3})-`)
+- 추출된 숫자들 중 **최댓값(max)을 구하고 +1** → 3자리 zero-pad (예: max=1 → `002`, max=12 → `013`)
+- Glob 결과가 비어있으면 `001`부터 시작
+
+**3) 기능명 결정:**
+
+- 사용자 요청에서 핵심 기능명을 추출하여 **kebab-case**로 변환
+
+**4) 최종 ID 조합:**
+
+- 형식: `{NNN}-{feature-name}` (예: `002-user-authentication`)
+
+**5) 중복 방지 검증:**
+
+```
+Glob tool:
+- pattern: "${PROJECT_ROOT}/.specify/specs/{NNN}-{feature-name}"
+```
+
+- 동일 디렉토리가 이미 존재하면 번호를 +1 증가시켜 재시도
 
 ### Step 3: 기존 태스크 정리
 
@@ -166,93 +188,140 @@ Skill tool:
 
 | 규모 | 기준 | 팀 구성 |
 |------|------|--------|
-| Small | 단일 기능, 파일 5개 미만 | researcher 1명 |
-| Medium | 복합 기능, 파일 5-15개 | researcher + explorer |
-| Large | 대규모 기능, 파일 15개+ | researcher + explorer + analyst |
+| Small | 단일 기능, 파일 5개 미만 | pm 1명 |
+| Medium | 복합 기능, 파일 5-15개 | pm + architect |
+| Large | 대규모 기능, 파일 15개+ | pm + architect + critic |
 
 ### Step 3: 팀메이트 생성 (병렬)
 
 role-templates 스킬의 프롬프트 템플릿을 사용하여 팀메이트 생성:
 
-**researcher 생성 (필수):**
+**pm 생성 (필수):**
 ```
 Task tool:
 - subagent_type: "general-purpose"
 - team_name: "specify-{spec-id}"
-- name: "researcher"
-- description: "요구사항 분석"
+- name: "pm"
+- description: "요구사항 분석 + 제품 관점"
 - prompt: |
-    너는 요구사항 분석 전문가이다.
+    너는 제품 기획자(PM)이다.
 
     **임무:**
     1. 사용자 요청을 분석하여 사용자 스토리(US), 기능 요구사항(FR), 비기능 요구사항(NFR), 엣지 케이스(EC)를 도출
     2. 필요시 Context7, WebSearch를 사용하여 관련 기술 문서를 조사
     3. 불명확한 요구사항을 식별하고 명확화 질문 목록 작성
 
+    **제품 관점:**
+    4. "이 기능이 사용자에게 어떤 가치를 주는가?" — 사용자 가치 중심 사고
+    5. "MVP에 꼭 필요한 범위는?" — 최소 핵심 범위 판단
+    6. 우선순위 분류: P1(필수) / P2(중요) / P3(선택)
+
     **사용자 요청:** {사용자 요청 원문}
 
     **constitution.md 규칙:** {constitution 내용 또는 "없음"}
 
     **출력 형식:**
+    ## 요구사항 분석 결과
+    ### 사용자 가치
+    - [이 기능의 핵심 가치 한 줄]
+    ### MVP 범위 판단
+    - P1(필수): [항목]
+    - P2(중요): [항목]
+    - P3(선택): [항목]
+    ### 요구사항
     - US-NNN: As a [user], I want [goal] so that [benefit]
-    - FR-NNN: [검증 가능한 기능 요구사항]
+    - FR-NNN: [검증 가능한 기능 요구사항] (P1/P2/P3)
     - NFR-NNN: [측정 가능한 비기능 요구사항]
     - EC-NNN: [경계 조건/엣지 케이스]
-    - 불명확 사항: [목록]
+    ### 불명확 사항
+    - [목록]
 
     작업 완료 시 반드시 SendMessage로 리더에게 결과를 보고하세요.
 ```
 
-**explorer 생성 (Medium 이상):**
+**architect 생성 (Medium 이상):**
 ```
 Task tool:
 - subagent_type: "general-purpose"
 - team_name: "specify-{spec-id}"
-- name: "explorer"
-- description: "코드베이스 분석"
+- name: "architect"
+- description: "코드베이스 분석 + 설계 정합성"
 - prompt: |
-    너는 코드베이스 분석 전문가이다.
+    너는 소프트웨어 아키텍트이다.
 
     **임무:**
+    [코드베이스 분석]
     1. 프로젝트 디렉토리 구조 분석
     2. 기존 아키텍처 패턴 식별
     3. 재사용 가능한 유틸리티/컴포넌트/타입 목록 작성
     4. 유사 기능의 기존 구현 패턴 파악
     5. 코딩 컨벤션 파악
 
+    [설계 정합성]
+    6. 기능 요구사항과 기존 아키텍처 간 정합성 분석
+    7. Breaking Change 가능성 평가
+    8. 구현 계획 초안 작성 (Phase 분류, FR 매핑)
+
+    **아키텍처 결정 기록(ADR) 관점:**
+    - 각 설계 결정에 대해 "왜 이 방식인가?"를 명시
+    - 고려한 대안과 선택 이유 기록
+
     **프로젝트 루트:** {PROJECT_ROOT}
     **분석 대상 기능:** {사용자 요청 요약}
 
     **출력 형식:**
-    ## 코드베이스 분석 결과
+    ## 아키텍처 분석 결과
     ### 디렉토리 구조
     ### 아키텍처 패턴
     ### 재사용 가능 코드
     | 코드 | 위치 | 재사용 방법 |
-    ### 기존 패턴
-    ### 코딩 컨벤션
+    ### 기존 패턴 + 컨벤션
+    ### 설계 결정 (ADR)
+    | 결정 | 선택 | 대안 | 이유 |
+    ### 정합성 분석
+    ### Breaking Change 분석
 
     작업 완료 시 반드시 SendMessage로 리더에게 결과를 보고하세요.
 ```
 
-**analyst 생성 (Large만):**
+**critic 생성 (Large만):**
 ```
 Task tool:
 - subagent_type: "general-purpose"
 - team_name: "specify-{spec-id}"
-- name: "analyst"
-- description: "설계 분석"
+- name: "critic"
+- description: "Devil's Advocate 비판적 검토"
 - prompt: |
-    너는 설계 분석 전문가이다.
+    너는 Devil's Advocate(악마의 변호인)이다.
 
     **임무:**
-    1. 기능 요구사항과 기존 아키텍처 간 정합성 분석
-    2. Breaking Change 가능성 평가
-    3. 구현 계획 초안 작성 (Phase 분류, FR 매핑)
-    4. 재사용 분석의 적절성 검증
+    팀의 설계 결정과 요구사항 분석을 비판적 시각으로 검토한다.
+    "이것이 정말 최선인가?"를 끊임없이 질문한다.
+
+    **검토 관점:**
+    1. 대안 존재 여부: "더 단순한 방법은 없는가?"
+    2. 리스크 식별: "이 접근의 잠재적 문제는?"
+    3. 누락 검증: "빠뜨린 요구사항/엣지 케이스는?"
+    4. 과잉 설계: "이게 정말 필요한 복잡도인가?"
+    5. 사용자 관점: "실제 사용자가 이렇게 쓸까?"
 
     **프로젝트 루트:** {PROJECT_ROOT}
     **분석 대상 기능:** {사용자 요청 요약}
+
+    **출력 형식:**
+    ## Devil's Advocate Review
+    ### 도전 질문 (반드시 3개 이상)
+    - [질문 1]: [근거]
+    - [질문 2]: [근거]
+    - [질문 3]: [근거]
+    ### 리스크 식별
+    | 리스크 | 영향도 | 발생 가능성 | 대응 방안 |
+    ### 대안 제안
+    | 현재 접근 | 대안 | 장점 | 단점 |
+    ### 누락 항목
+    - [누락된 요구사항/엣지 케이스]
+    ### 최종 판정: APPROVE / CONCERN / REJECT
+    - 판정 근거: [한 줄]
 
     작업 완료 시 반드시 SendMessage로 리더에게 결과를 보고하세요.
 ```
@@ -264,7 +333,7 @@ Task tool:
 
 ### Step 5: 불명확한 부분 사전 질문
 
-researcher의 분석에서 불명확한 부분이 있으면 AskUserQuestion으로 해소:
+pm의 분석에서 불명확한 부분이 있으면 AskUserQuestion으로 해소:
 
 | 불명확한 부분 | 질문 예시 |
 |-------------|----------|
@@ -359,11 +428,11 @@ Phase 1 팀메이트 결과 + Phase 2 결정사항을 기반으로 spec.md를 �
 
 ### Step 3: Plan 작성
 
-Spec + explorer 분석결과를 기반으로 plan.md를 메모리에 작성:
+Spec + architect 분석결과를 기반으로 plan.md를 메모리에 작성:
 
 - 설계 방향 및 개요
 - FR 매핑 테이블
-- 재사용 분석 (explorer 결과 기반)
+- 재사용 분석 (architect 결과 기반)
 - 변경 파일 목록
 - 구현 단계 (Phase별 Task + 체크박스)
 - E2E 테스트 시나리오
@@ -371,7 +440,10 @@ Spec + explorer 분석결과를 기반으로 plan.md를 메모리에 작성:
 
 > plan 템플릿: skills/plan-writing/references/plan-template.md 참조
 
-Large 규모에서 analyst 결과가 있으면 정합성 검증 결과를 반영합니다.
+Large 규모에서 critic 결과가 있으면 Devil's Advocate Review를 반영합니다:
+- 도전 질문에 대한 응답을 설계에 반영
+- 식별된 리스크에 대한 대응 방안을 plan에 포함
+- 누락 항목을 spec에 추가
 
 ### Step 4: 작성 완료 알림
 
@@ -465,10 +537,10 @@ Spec/Plan이 저장되지 않았습니다.
 ```
 SendMessage tool:
 - type: "shutdown_request"
-- recipient: "researcher"
+- recipient: "pm"
 - content: "Specify 완료, 팀을 해산합니다."
 
-(explorer, analyst도 동일)
+(architect, critic도 동일 — 생성된 팀메이트만)
 ```
 
 ### Step 2: 팀 삭제
@@ -522,7 +594,7 @@ TaskUpdate (각 태스크) -> status: "deleted"
 
 ### 검색 도구 활용
 
-researcher 팀메이트가 직접 사용:
+pm 팀메이트가 직접 사용:
 - Context7: 라이브러리/프레임워크 공식 문서
 - WebSearch: 일반 웹 검색, 최신 정보
 

@@ -11,7 +11,7 @@ Agent Teams 기반으로 팀을 구성하고, 팀메이트에게 검증을 병�
 
 **핵심 원칙**:
 - **리더(이 커맨드)는 사용자와 소통하고 팀을 조율** - 코드 직접 수정 금지
-- **모든 검증은 팀메이트(tester, reviewer, validator)가 수행**
+- **모든 검증은 팀메이트(qa, critic, architect)가 수행**
 - **병렬 검증으로 속도 최적화**
 - **문제 발견 시 수정 방법 선택 가능 (자동/가이드/스킵)**
 
@@ -42,9 +42,9 @@ Phase 4: 최종 리포트 + 팀 해산
 | 0 | 3 | 기존 태스크 정리 | TaskList, TaskUpdate |
 | 0 | 4 | 태스크 등록 | TaskCreate |
 | 2 | 1 | 팀 생성 | TeamCreate |
-| 2 | 2 | 팀메이트 생성 (tester, reviewer 등) | Task (team_name) |
+| 2 | 2 | 팀메이트 생성 (qa, critic 등) | Task (team_name) |
 | 2 | 3 | 병렬 검증 지시 | SendMessage |
-| 3 | 3 | 수정 시 implementer 생성 | Task (team_name) |
+| 3 | 3 | 수정 시 developer 생성 | Task (team_name) |
 | 4 | 2 | 팀 해산 | SendMessage (shutdown), TeamDelete |
 
 **금지 사항:**
@@ -192,100 +192,89 @@ Skill tool:
 
 | 규모/범위 | 팀 구성 |
 |----------|--------|
-| Small / 빠른 | validator 1명 |
-| Medium / 표준 | tester + reviewer |
-| Large / 완전 | tester + reviewer + validator |
+| Small / 빠른 | qa 1명 |
+| Medium / 표준 | qa + critic |
+| Large / 완전 | qa + architect + critic |
 
 ### Step 3: 팀메이트 생성 + 검증 지시 (병렬)
 
-**tester 생성 (표준 이상):**
+**qa 생성 (필수):**
 ```
 Task tool:
 - subagent_type: "general-purpose"
 - team_name: "verify-{spec-id}"
-- name: "tester"
-- description: "테스트 실행 및 정적 분석"
+- name: "qa"
+- description: "테스트 + 정적 분석 + 코드 품질"
 - prompt: |
-    너는 테스트 및 정적 분석 전문가이다.
+    너는 QA 엔지니어이다.
 
     **즉시 실행할 검증 항목:**
+
+    [테스트 + 정적 분석]
     1. 타입 체크 (tsc --noEmit, javac 등 프로젝트에 맞게)
     2. 린트 체크 (eslint, checkstyle 등)
     3. 전체 테스트 실행
     4. 커버리지 분석 (목표: >= 80%)
     5. 빌드 검증 (표준/완전 범위)
 
+    [코드 품질]
+    6. 코드 스멜 탐지 (Long Method, God Object, Duplicate Code 등)
+    7. SOLID 원칙 준수 여부 확인
+    8. DRY 위반 탐지
+    9. 복잡도 분석 (Cyclomatic <= 10, 매개변수 <= 4, 중첩 <= 3)
+    10. constitution.md 규칙 준수 확인
+
     **변경 파일 목록:** [plan.md에서 추출]
     **프로젝트 루트:** {PROJECT_ROOT}
+    **constitution 규칙:** {constitution 내용 또는 "없음"}
 
     **기존 테스트 실패 시:**
     - 사이드 이펙트 분석 필수
     - 의도적 변경 vs 예상치 못한 영향 구분
 
     **출력 형식:**
-    ## 정적 분석 + 테스트 결과
+    ## QA 검증 결과
+    ### 정적 분석 + 테스트
     | 항목 | 상태 | 상세 |
     - 타입 체크: PASS/FAIL (상세)
     - 린트: PASS/FAIL/WARN (상세)
     - 테스트: N/N 통과 (실패 목록)
     - 커버리지: N% (파일별 상세)
     - 빌드: PASS/FAIL
-
-    작업 완료 시 반드시 SendMessage로 리더에게 결과를 보고하세요.
-```
-
-**reviewer 생성 (표준 이상):**
-```
-Task tool:
-- subagent_type: "general-purpose"
-- team_name: "verify-{spec-id}"
-- name: "reviewer"
-- description: "코드 품질 분석"
-- prompt: |
-    너는 코드 품질 리뷰 전문가이다.
-
-    **즉시 실행할 검증 항목:**
-    1. 코드 스멜 탐지 (Long Method, God Object, Duplicate Code 등)
-    2. SOLID 원칙 준수 여부 확인
-    3. DRY 위반 탐지
-    4. 복잡도 분석 (Cyclomatic <= 10, 매개변수 <= 4, 중첩 <= 3)
-    5. constitution.md 규칙 준수 확인
-
-    **변경 파일 목록:** [plan.md에서 추출]
-    **프로젝트 루트:** {PROJECT_ROOT}
-    **constitution 규칙:** {constitution 내용 또는 "없음"}
-
-    **출력 형식:**
-    ## 코드 품질 분석 결과
-    ### 요약
+    ### 코드 품질
     | 항목 | 상태 | 이슈 수 |
     ### 상세 이슈
-    | 파일 | 라인 | 이슈 | 심각도 |
+    | 파일 | 라인 | 이슈 | 심각도 (Critical/Warning/Info) |
     ### 개선 제안
 
-    Critical/Warning/Info 분류하여 보고.
     작업 완료 시 반드시 SendMessage로 리더에게 결과를 보고하세요.
 ```
 
-**validator 생성 (Large 또는 표준 이상):**
+**critic 생성 (Medium 이상):**
 ```
 Task tool:
 - subagent_type: "general-purpose"
 - team_name: "verify-{spec-id}"
-- name: "validator"
-- description: "요구사항 충족 검증"
+- name: "critic"
+- description: "요구사항 검증 + Devil's Advocate"
 - prompt: |
-    너는 요구사항 검증 전문가이다.
+    너는 Devil's Advocate(악마의 변호인)이다.
 
-    **즉시 실행할 검증 항목:**
-    1. spec.md의 각 FR/NFR 항목에 대해 구현 충족 여부 확인
-    2. plan.md의 E2E 테스트 시나리오 기반 검증
-    3. 기존 테스트가 실제로 요구사항을 커버하는지 확인
+    **verify 전용 임무:**
+    1. spec.md의 각 FR/NFR 항목이 실제로 구현되었는지 검증
+    2. qa가 놓친 테스트 시나리오 식별
+    3. "통과"로 보고된 항목이 정말 통과인지 의심
     4. Breaking Change가 적절히 처리되었는지 확인
+    5. 전체 검증의 충분성 판단
 
     **spec.md 경로:** ${PROJECT_ROOT}/.specify/specs/{spec-id}/spec.md
     **plan.md 경로:** ${PROJECT_ROOT}/.specify/specs/{spec-id}/plan.md
     **프로젝트 루트:** {PROJECT_ROOT}
+
+    **도전 질문 (반드시 포함):**
+    - "이 테스트가 정말 요구사항을 검증하는가?"
+    - "edge case X는 테스트하지 않았는데?"
+    - "이 코드 품질 점수가 너무 관대하지 않은가?"
 
     **출력 형식:**
     ## 요구사항 충족 검증
@@ -294,6 +283,50 @@ Task tool:
     - partial: 부분 충족
     - fail: 미충족
     - unknown: 검증 불가
+
+    ## Devil's Advocate Review
+    ### 도전 질문 (반드시 3개 이상)
+    - [질문 1]: [근거]
+    - [질문 2]: [근거]
+    - [질문 3]: [근거]
+    ### 리스크 식별
+    | 리스크 | 영향도 | 발생 가능성 | 대응 방안 |
+    ### 누락된 테스트 시나리오
+    - [시나리오]
+    ### 최종 판정: APPROVE / CONCERN / REJECT
+    - 판정 근거: [한 줄]
+
+    작업 완료 시 반드시 SendMessage로 리더에게 결과를 보고하세요.
+```
+
+**architect 생성 (Large만):**
+```
+Task tool:
+- subagent_type: "general-purpose"
+- team_name: "verify-{spec-id}"
+- name: "architect"
+- description: "아키텍처 정합성 검증"
+- prompt: |
+    너는 소프트웨어 아키텍트이다.
+
+    **즉시 실행할 검증 항목:**
+    1. spec.md의 FR이 plan.md에 모두 매핑되었는지 검증
+    2. plan.md의 구현 단계가 spec의 요구사항을 모두 충족하는지 확인
+    3. Breaking Change 영향 분석
+    4. 아키텍처 패턴 준수 여부 확인
+    5. 통합 시점에서 일관성 검증
+
+    **spec.md 경로:** ${PROJECT_ROOT}/.specify/specs/{spec-id}/spec.md
+    **plan.md 경로:** ${PROJECT_ROOT}/.specify/specs/{spec-id}/plan.md
+    **프로젝트 루트:** {PROJECT_ROOT}
+
+    **출력 형식:**
+    ## 아키텍처 정합성 검증
+    ### FR 매핑 검증
+    | FR | plan.md 매핑 | 구현 상태 |
+    ### Breaking Change 분석
+    ### 아키텍처 패턴 준수
+    ### 개선 제안
 
     작업 완료 시 반드시 SendMessage로 리더에게 결과를 보고하세요.
 ```
@@ -352,16 +385,16 @@ AskUserQuestion:
 
 ### Step 3: 수정 실행
 
-자동 수정이 필요한 경우 implementer 팀메이트를 생성:
+자동 수정이 필요한 경우 developer 팀메이트를 생성:
 
 ```
 Task tool:
 - subagent_type: "general-purpose"
 - team_name: "verify-{spec-id}"
-- name: "implementer"
+- name: "developer"
 - description: "검증 실패 수정"
 - prompt: |
-    너는 코드 수정 전문가이다.
+    너는 코드 구현 전문가이다.
 
     리더의 지시에 따라 검증 실패 항목을 수정합니다.
     기존 패턴 유지, 최소한의 수정으로 문제 해결.
@@ -373,7 +406,7 @@ Task tool:
 ```
 SendMessage tool:
 - type: "message"
-- recipient: "implementer"
+- recipient: "developer"
 - content: |
     **검증 실패 수정 요청**
 
@@ -400,7 +433,7 @@ AskUserQuestion:
 - header: "문제 #N"
 - options:
   - label: "자동 수정 (권장)"
-    description: "implementer에게 수정 위임"
+    description: "developer에게 수정 위임"
   - label: "가이드만"
     description: "수정 방법 안내 (직접 수정)"
   - label: "스킵"
@@ -425,12 +458,12 @@ AskUserQuestion:
 
 ### Step 4: 재검증
 
-수정 완료 후 tester에게 재검증 지시:
+수정 완료 후 qa에게 재검증 지시:
 
 ```
 SendMessage tool:
 - type: "message"
-- recipient: "tester"
+- recipient: "qa"
 - content: |
     **수정 후 재검증 요청**
 
@@ -554,10 +587,10 @@ AskUserQuestion:
 ```
 SendMessage tool:
 - type: "shutdown_request"
-- recipient: "tester"
+- recipient: "qa"
 - content: "Verify 완료, 팀을 해산합니다."
 
-(reviewer, validator, implementer도 동일)
+(critic, architect, developer도 동일 — 생성된 팀메이트만)
 
 TeamDelete tool
 ```
