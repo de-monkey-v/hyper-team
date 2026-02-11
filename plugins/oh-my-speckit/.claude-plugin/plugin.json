@@ -1,0 +1,11 @@
+{
+  "name": "oh-my-speckit",
+  "version": "1.0.0",
+  "description": "Agent Teams 기반 개발 워크플로우 - Specify -> Implement -> Verify",
+  "author": {
+    "name": "de-monkey"
+  },
+  "keywords": ["workflow", "architecture", "agent-teams", "code-quality", "clean-architecture"],
+  "repository": "https://github.com/de-monkey-v/marketplace",
+  "license": "MIT"
+}

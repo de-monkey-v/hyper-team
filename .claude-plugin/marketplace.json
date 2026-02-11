@@ -37,6 +37,11 @@
       "name": "search",
       "source": "./plugins/search",
       "description": "Parallel search across web and official docs with unified answers (includes Tavily deep search)"
+    },
+    {
+      "name": "oh-my-speckit",
+      "source": "./plugins/oh-my-speckit",
+      "description": "Agent Teams 기반 개발 워크플로우 - Specify -> Implement -> Verify"
     }
   ]
 }
