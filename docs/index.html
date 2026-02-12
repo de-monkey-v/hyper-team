@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>marketplace — Claude Code Plugins for Power Users</title>
-  <meta name="description" content="A collection of Claude Code plugins for power users. Search, notifications, AI CLI tools, git automation, team workflows, and plugin scaffolding.">
+  <meta name="description" content="A collection of Claude Code plugins for power users. Search, notifications, AI CLI tools, git automation, team workflows, plugin scaffolding, and spec-driven development.">
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
   <link rel="stylesheet" href="css/style.css">
 </head>
@@ -40,7 +40,7 @@
   <!-- Plugins -->
   <section class="section" id="plugins">
     <h2 class="section-title">Plugins</h2>
-    <p class="section-desc">Six plugins to supercharge your Claude Code workflow.</p>
+    <p class="section-desc">Seven plugins to supercharge your Claude Code workflow.</p>
 
     <div class="plugin-grid">
 
@@ -155,6 +155,24 @@
         </div>
       </div>
 
+      <!-- oh-my-speckit -->
+      <div class="plugin-card">
+        <div class="plugin-header">
+          <div class="plugin-icon speckit">&#128220;</div>
+          <span class="plugin-name">oh-my-speckit</span>
+        </div>
+        <p class="plugin-desc">
+          Agent Teams 기반 개발 워크플로우.
+          Specify → Implement → Verify 3단계로 스펙 작성부터 구현, 검증까지.
+        </p>
+        <p class="plugin-tip"><strong>Typical usage:</strong> <code>/oh-my-speckit:specify</code>로 요구사항을 spec + plan으로 변환 → <code>/oh-my-speckit:implement</code>로 구현 → <code>/oh-my-speckit:verify</code>로 검증.</p>
+        <div class="plugin-commands">
+          <span class="cmd-tag">/oh-my-speckit:specify</span>
+          <span class="cmd-tag">/oh-my-speckit:implement</span>
+          <span class="cmd-tag">/oh-my-speckit:verify</span>
+        </div>
+      </div>
+
     </div>
   </section>
 
@@ -182,7 +200,8 @@
 /plugin install ai-cli-tools@marketplace
 /plugin install git-utils@marketplace
 /plugin install hyper-team@marketplace
-/plugin install plugin-creator@marketplace</code></pre>
+/plugin install plugin-creator@marketplace
+/plugin install oh-my-speckit@marketplace</code></pre>
       </div>
 
       <div class="step">

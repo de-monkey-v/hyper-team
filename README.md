@@ -14,6 +14,7 @@ A collection of Claude Code plugins for power users. Install individually or use
 | [git-utils](plugins/git-utils) | Git workflow automation — commit, branch, diff, log, status | `/git-utils:setup` |
 | [hyper-team](plugins/hyper-team) | Agent Teams workflow helper — setup, prompt generation, verification | `/hyper-team:setup` |
 | [plugin-creator](plugins/plugin-creator) | Plugin scaffolding & validation toolkit | `/plugin-creator:setup` |
+| [oh-my-speckit](plugins/oh-my-speckit) | Agent Teams 기반 Specify → Implement → Verify 워크플로우 | — |
 
 ## Installation
 
@@ -28,6 +29,7 @@ For example:
 ```bash
 claude plugin install search@de-monkey-v/marketplace
 claude plugin install notification@de-monkey-v/marketplace
+claude plugin install oh-my-speckit@de-monkey-v/marketplace
 ```
 
 ### First-time setup
@@ -123,6 +125,19 @@ Create Claude Code plugins interactively.
 > **Typical usage**: `create-plugin` for new plugins/commands/skills, `modify-plugin` for existing ones. Handles plugins, project commands, skills, agents, and hooks.
 
 **Commands**: `/plugin-creator:create-plugin`, `/plugin-creator:modify-plugin`, `/plugin-creator:validate`, `/plugin-creator:setup`
+
+### oh-my-speckit
+
+Agent Teams 기반 개발 워크플로우 — Specify → Implement → Verify.
+
+- 요구사항을 spec.md + plan.md로 변환
+- plan.md 기반 자동/대화형 코드 구현
+- 구현 결과 검증 (테스트, 코드 품질, 요구사항 매칭)
+- 7개 스킬 (architecture-guide, spec-writing, plan-writing, code-generation, test-write, code-quality, role-templates)
+
+> **Typical usage**: `/oh-my-speckit:specify`로 기능 요청을 spec + plan으로 → `/oh-my-speckit:implement`로 구현 → `/oh-my-speckit:verify`로 검증.
+
+**Commands**: `/oh-my-speckit:specify`, `/oh-my-speckit:implement`, `/oh-my-speckit:verify`
 
 ## Environment Variables
 

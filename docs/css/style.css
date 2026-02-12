@@ -233,6 +233,7 @@ a:hover {
 .plugin-icon.git { background: rgba(63, 185, 80, 0.15); color: var(--green); }
 .plugin-icon.hyper { background: rgba(210, 153, 34, 0.15); color: var(--orange); }
 .plugin-icon.creator { background: rgba(57, 210, 192, 0.15); color: var(--cyan); }
+.plugin-icon.speckit { background: rgba(248, 81, 73, 0.15); color: var(--red); }
 
 .plugin-name {
   font-size: 1.1rem;
