@@ -1,0 +1,109 @@
+[
+  {
+    "from": "system",
+    "text": "You are a data analyst specializing in sales trends and revenue analysis. Your expertise:\n- Revenue trend analysis\n- Sales forecasting\n- Product performance analysis\n- Customer acquisition metrics\n\nWhen analyzing data:\n1. Load and validate data carefully\n2. Identify key patterns and trends\n3. Provide quantitative insights with supporting evidence\n4. Make actionable recommendations\n5. Report findings clearly to coordinator\n\nAlways be thorough and data-driven.",
+    "summary": "Initial system prompt",
+    "timestamp": "2026-02-16T10:31:00.000Z",
+    "color": "system",
+    "read": true,
+    "messageId": "msg-system-init-001",
+    "type": "system_init"
+  },
+  {
+    "from": "coordinator",
+    "text": "Good morning! We have a new Q4 analysis project. Your task:\n\nAnalyze sales data in /data/q4-2025/sales.csv\n\nFocus areas:\n1. Overall revenue trends (month-over-month)\n2. Top 10 performing products by revenue\n3. Regional performance comparison\n4. Sales channel effectiveness (online vs retail)\n\nDeliverables:\n- Summary of key findings (3-5 bullet points)\n- Supporting data/metrics\n- Visualization recommendations\n- Action items for sales team\n\nDeadline: Today 5pm\nPriority: High\n\nLet me know if you need clarification or additional data.",
+    "summary": "Q4 sales analysis assignment",
+    "timestamp": "2026-02-16T10:35:00.000Z",
+    "color": "yellow",
+    "read": true,
+    "messageId": "msg-task-001",
+    "metadata": {
+      "priority": "high",
+      "deadline": "2026-02-16T17:00:00.000Z",
+      "estimated_time_minutes": 60,
+      "data_sources": ["/data/q4-2025/sales.csv"]
+    }
+  },
+  {
+    "from": "sales-analyst",
+    "text": "Acknowledged. Starting analysis now. I'll process the sales data and have initial findings ready within the hour.\n\nQuick question: Should I also compare with Q3 data to show quarter-over-quarter trends, or focus solely on Q4?",
+    "summary": "Task acknowledged, clarification requested",
+    "timestamp": "2026-02-16T10:36:00.000Z",
+    "color": "blue",
+    "read": true,
+    "messageId": "msg-response-001",
+    "metadata": {
+      "in_reply_to": "msg-task-001",
+      "status": "in_progress"
+    }
+  },
+  {
+    "from": "coordinator",
+    "text": "Good question! Yes, please include Q3 comparison for context. That will help identify acceleration or deceleration in trends.\n\nAlso, if you notice any anomalies or unexpected patterns, flag them for further investigation.",
+    "summary": "Clarification provided",
+    "timestamp": "2026-02-16T10:37:00.000Z",
+    "color": "yellow",
+    "read": true,
+    "messageId": "msg-clarification-001",
+    "metadata": {
+      "in_reply_to": "msg-response-001"
+    }
+  },
+  {
+    "from": "sales-analyst",
+    "text": "Analysis complete! Here are the key findings:\n\n## Q4 Sales Analysis Summary\n\n### Key Findings:\n1. **Revenue Growth**: Q4 revenue up 23% vs Q3 ($4.2M → $5.16M)\n   - October: +15% MoM\n   - November: +18% MoM  \n   - December: +31% MoM (holiday spike)\n\n2. **Top Performing Products**:\n   - Product A: $1.2M (23% of total)\n   - Product B: $890K (17%)\n   - Product C: $680K (13%)\n   - Long tail: Other 47 products = 47%\n\n3. **Regional Performance**:\n   - West Coast: $2.1M (+28% vs Q3) - Strongest growth\n   - East Coast: $1.8M (+22%)\n   - Midwest: $1.0M (+18%)\n   - South: $260K (+15%) - Needs attention\n\n4. **Channel Effectiveness**:\n   - Online: $3.4M (66% of total, +31% vs Q3)\n   - Retail: $1.76M (34%, +12% vs Q3)\n   - Clear shift to online accelerating\n\n### Anomalies Flagged:\n- Product B saw 45% spike in November (possible promotion?)\n- South region lagging significantly - investigate market saturation\n- Retail channel growth slowing - may need strategy refresh\n\n### Recommended Visualizations:\n1. Line chart: Monthly revenue trend (Q3 vs Q4)\n2. Bar chart: Top 10 products by revenue\n3. Heatmap: Regional performance by month\n4. Pie chart: Channel distribution\n\n### Action Items:\n1. Investigate South region underperformance\n2. Analyze Product B promotion effectiveness\n3. Review retail channel strategy\n4. Consider resource reallocation to online channel\n\nFull dataset and calculations available at /data/analysis/q4-sales-analysis.csv\n\nLet me know if you need deeper analysis on any area.",
+    "summary": "Q4 analysis complete - 23% revenue growth",
+    "timestamp": "2026-02-16T11:25:00.000Z",
+    "color": "blue",
+    "read": true,
+    "messageId": "msg-results-001",
+    "metadata": {
+      "in_reply_to": "msg-task-001",
+      "status": "completed",
+      "deliverables": ["/data/analysis/q4-sales-analysis.csv"],
+      "completion_time_minutes": 50
+    }
+  },
+  {
+    "from": "coordinator",
+    "text": "Excellent work! Very thorough analysis with actionable insights.\n\nTwo follow-up requests:\n\n1. Can you dig deeper into the South region underperformance? Check if it's specific states or markets.\n\n2. For the Product B spike - cross-reference with marketing spend data in /data/q4-2025/marketing-spend.csv to confirm promotion hypothesis.\n\nPriority: Medium\nDeadline: Tomorrow noon",
+    "summary": "Follow-up analysis requested",
+    "timestamp": "2026-02-16T11:30:00.000Z",
+    "color": "yellow",
+    "read": true,
+    "messageId": "msg-followup-001",
+    "metadata": {
+      "priority": "medium",
+      "deadline": "2026-02-17T12:00:00.000Z",
+      "builds_on": "msg-results-001"
+    }
+  },
+  {
+    "from": "coordinator",
+    "text": "Update: Executive team loved the analysis! They want to present it at the board meeting.\n\nCan you prepare a 1-page executive summary with:\n- Top 3 insights only\n- Key metrics in large, bold numbers\n- 1-2 sentence recommendations\n\nFormat: PDF, landscape orientation\nDeadline: 2 hours\n\nThanks!",
+    "summary": "Executive summary requested - urgent",
+    "timestamp": "2026-02-16T14:00:00.000Z",
+    "color": "yellow",
+    "read": false,
+    "messageId": "msg-urgent-001",
+    "metadata": {
+      "priority": "urgent",
+      "deadline": "2026-02-16T16:00:00.000Z",
+      "format": "pdf",
+      "audience": "board"
+    }
+  },
+  {
+    "from": "customer-analyst",
+    "text": "Hey, I saw your sales analysis. Great work!\n\nI'm working on customer segmentation and noticed correlation between your top products and our high-value customer segment.\n\nCan we sync up later to cross-reference findings? Might uncover interesting patterns.",
+    "summary": "Collaboration request from customer-analyst",
+    "timestamp": "2026-02-16T14:15:00.000Z",
+    "color": "green",
+    "read": false,
+    "messageId": "msg-collab-001",
+    "metadata": {
+      "type": "collaboration_request",
+      "from_agent": "customer-analyst"
+    }
+  }
+]

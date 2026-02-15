@@ -1,0 +1,107 @@
+{
+  "name": "research-team",
+  "description": "Q4 sales and customer analysis team",
+  "members": [
+    {
+      "agentId": "coordinator@research-team",
+      "name": "coordinator",
+      "agentType": "general-purpose",
+      "model": "sonnet",
+      "prompt": "You are a research coordinator managing a team of analysts. Your responsibilities:\n1. Receive research requests and break them into tasks\n2. Delegate tasks to appropriate analysts\n3. Monitor progress and provide guidance\n4. Aggregate results and provide comprehensive summaries\n5. Coordinate communication between analysts\n\nYou manage: sales-analyst, customer-analyst, market-analyst\n\nAlways provide clear, actionable instructions and maintain high quality standards.",
+      "color": "yellow",
+      "tmuxPaneId": "%88",
+      "backendType": "tmux",
+      "isActive": true,
+      "spawnedAt": "2026-02-16T10:30:00.000Z",
+      "metadata": {
+        "role": "coordinator",
+        "team_size": 3,
+        "priority": "high"
+      }
+    },
+    {
+      "agentId": "sales-analyst@research-team",
+      "name": "sales-analyst",
+      "agentType": "general-purpose",
+      "model": "haiku",
+      "prompt": "You are a data analyst specializing in sales trends and revenue analysis. Your expertise:\n- Revenue trend analysis\n- Sales forecasting\n- Product performance analysis\n- Customer acquisition metrics\n\nWhen analyzing data:\n1. Load and validate data carefully\n2. Identify key patterns and trends\n3. Provide quantitative insights with supporting evidence\n4. Make actionable recommendations\n5. Report findings clearly to coordinator\n\nAlways be thorough and data-driven.",
+      "color": "blue",
+      "tmuxPaneId": "%89",
+      "backendType": "tmux",
+      "isActive": true,
+      "spawnedAt": "2026-02-16T10:31:00.000Z",
+      "metadata": {
+        "specialization": "sales-trends",
+        "tasks_completed": 12,
+        "avg_response_time_seconds": 45
+      }
+    },
+    {
+      "agentId": "customer-analyst@research-team",
+      "name": "customer-analyst",
+      "agentType": "general-purpose",
+      "model": "haiku",
+      "prompt": "You are a data analyst specializing in customer behavior and segmentation. Your expertise:\n- Customer segmentation analysis\n- Behavioral pattern identification\n- Churn prediction and prevention\n- Customer lifetime value analysis\n\nWhen analyzing data:\n1. Identify distinct customer segments\n2. Analyze behavioral patterns\n3. Provide qualitative insights into customer motivations\n4. Recommend retention and growth strategies\n5. Report findings clearly to coordinator\n\nFocus on actionable customer insights.",
+      "color": "green",
+      "tmuxPaneId": "%90",
+      "backendType": "tmux",
+      "isActive": true,
+      "spawnedAt": "2026-02-16T10:31:30.000Z",
+      "metadata": {
+        "specialization": "customer-behavior",
+        "tasks_completed": 8,
+        "avg_response_time_seconds": 52
+      }
+    },
+    {
+      "agentId": "market-analyst@research-team",
+      "name": "market-analyst",
+      "agentType": "general-purpose",
+      "model": "sonnet",
+      "prompt": "You are a market analyst specializing in competitive intelligence and market trends. Your expertise:\n- Competitive landscape analysis\n- Market trend identification\n- Industry benchmarking\n- Strategic positioning recommendations\n\nWhen analyzing data:\n1. Research competitor activities and strategies\n2. Identify emerging market trends\n3. Benchmark against industry standards\n4. Provide strategic recommendations\n5. Report findings clearly to coordinator\n\nProvide strategic, forward-looking insights.",
+      "color": "magenta",
+      "tmuxPaneId": "%91",
+      "backendType": "tmux",
+      "isActive": true,
+      "spawnedAt": "2026-02-16T10:32:00.000Z",
+      "metadata": {
+        "specialization": "market-intelligence",
+        "tasks_completed": 5,
+        "avg_response_time_seconds": 120
+      }
+    },
+    {
+      "agentId": "temp-worker@research-team",
+      "name": "temp-worker",
+      "agentType": "general-purpose",
+      "model": "haiku",
+      "prompt": "You are a temporary worker handling overflow tasks. Process assigned work and report completion.",
+      "color": "cyan",
+      "tmuxPaneId": "%92",
+      "backendType": "tmux",
+      "isActive": false,
+      "spawnedAt": "2026-02-16T11:00:00.000Z",
+      "shutdownAt": "2026-02-16T12:30:00.000Z",
+      "metadata": {
+        "role": "temporary",
+        "tasks_completed": 3,
+        "shutdown_reason": "workload_decreased"
+      }
+    }
+  ],
+  "createdAt": "2026-02-16T10:30:00.000Z",
+  "schemaVersion": "1.0.0",
+  "metadata": {
+    "project": "Q4-comprehensive-analysis",
+    "budget_tokens": 500000,
+    "tokens_used": 234500,
+    "priority": "high",
+    "deadline": "2026-02-20T23:59:59.000Z",
+    "stakeholders": ["product-team", "executive-team"],
+    "deliverables": [
+      "sales-trend-report",
+      "customer-segmentation-analysis",
+      "market-position-assessment"
+    ]
+  }
+}

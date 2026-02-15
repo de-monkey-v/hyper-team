@@ -42,6 +42,11 @@
       "name": "oh-my-speckit",
       "source": "./plugins/oh-my-speckit",
       "description": "Agent Teams 기반 개발 워크플로우 - Specify -> Implement -> Verify"
+    },
+    {
+      "name": "claude-team",
+      "source": "./plugins/claude-team",
+      "description": "Agent Teams teammate creation, control, and management toolkit"
     }
   ]
 }

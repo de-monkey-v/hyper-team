@@ -1,0 +1,10 @@
+{
+  "name": "claude-team",
+  "version": "1.0.0",
+  "description": "Agent Teams teammate creation, control, and management toolkit",
+  "author": {
+    "name": "de-monkey-v"
+  },
+  "repository": "https://github.com/de-monkey-v/marketplace",
+  "keywords": ["agent-teams", "teammates", "team-management", "automation"]
+}
