@@ -39,11 +39,13 @@ which tmux
 ```
 실패 시: "tmux가 설치되어 있지 않습니다. `sudo apt install tmux` 또는 `brew install tmux`로 설치하세요."
 
-**1-2. CLAUDE_CODE_TMUX_SESSION 확인:**
+**1-2. tmux 세션 내 실행 확인:**
 ```bash
-echo "$CLAUDE_CODE_TMUX_SESSION"
+echo "$TMUX"
 ```
-비어 있으면: "CLAUDE_CODE_TMUX_SESSION 환경변수가 설정되지 않았습니다. tmux 세션 내에서 Claude Code를 실행하세요."
+비어 있으면: "tmux 세션 내에서 Claude Code를 실행하세요."
+
+> **참고**: `CLAUDE_CODE_TMUX_SESSION` 환경변수는 불필요합니다. `$TMUX` 환경변수로 tmux 세션 여부를 확인하고, 세션 이름은 `tmux display-message -p '#S'`로 동적 감지합니다.
 
 **1-3. cli-proxy-api 확인:**
 ```bash
@@ -84,10 +86,16 @@ CONFIG="$HOME/.claude/teams/${TEAM}/config.json"
 LEAD_SESSION_ID=$(jq -r '.leadSessionId' "$CONFIG")
 ```
 
-### Step 4: tmux Pane 스폰
+### Step 4: tmux 세션 감지 및 Pane 스폰
 
+**4-1. 현재 tmux 세션 이름을 동적으로 감지:**
 ```bash
-PANE_ID=$(tmux split-window -t "$CLAUDE_CODE_TMUX_SESSION" -c "$PWD" -dP -F '#{pane_id}' \
+TMUX_SESSION=$(tmux display-message -p '#S')
+```
+
+**4-2. Pane 스폰 (크기 제어 포함):**
+```bash
+PANE_ID=$(tmux split-window -t "$TMUX_SESSION" -l 15 -c "$PWD" -dP -F '#{pane_id}' \
   "zsh -c 'source ~/.zshrc && gpt-claude-code \
     --agent-id ${NAME}@${TEAM} \
     --agent-name ${NAME} \
@@ -100,12 +108,31 @@ PANE_ID=$(tmux split-window -t "$CLAUDE_CODE_TMUX_SESSION" -c "$PWD" -dP -F '#{p
 echo "$PANE_ID"
 ```
 
+**4-3. 레이아웃 재조정:**
+
+팀메이트가 2개 이상이면 pane 크기를 균등하게 재배분합니다:
+```bash
+tmux select-layout -t "$TMUX_SESSION" main-vertical
+```
+
 핵심 플래그 설명:
+- `tmux display-message -p '#S'`: 현재 tmux 세션 이름을 동적으로 감지 (`CLAUDE_CODE_TMUX_SESSION` 환경변수 불필요)
+- `-l 15`: 팀메이트 pane을 15행으로 고정. 리더 pane이 지나치게 축소되는 것을 방지
+- `-d`: 새 pane으로 포커스 전환하지 않음 (리더 pane 유지)
+- `-P -F '#{pane_id}'`: 생성된 pane ID 반환
 - `source ~/.zshrc`: `gpt-claude-code` 함수 및 환경변수 로드
 - `--model opus`: cli-proxy-api의 환경변수에 의해 `gpt-5.3-codex(high)`로 매핑됨
 - `--agent-type claude-team:gpt`: `agents/gpt.md` 에이전트 설정 로드
 - `--parent-session-id`: 리더와의 메시지 라우팅 연결
 - `--dangerously-skip-permissions`: 자율적 실행 허용
+
+#### Pane 크기 전략
+
+| 시나리오 | 전략 |
+|----------|------|
+| 팀메이트 1개 | `-l 15`로 고정 크기 분할 |
+| 팀메이트 2개+ | 스폰 후 `main-vertical`로 재배치 (리더=왼쪽 전체높이, 팀메이트=우측 row) |
+| 터미널 너비 부족 (<120열) | 최소 너비 40열 보장, 부족 시 경고 |
 
 ### Step 5: Config 등록
 
@@ -125,7 +152,7 @@ jq --arg name "$NAME" --arg agentId "${NAME}@${TEAM}" --arg paneId "$PANE_ID" \
 
 **6-1. Pane 생존 확인:**
 ```bash
-tmux list-panes -t "$CLAUDE_CODE_TMUX_SESSION" -F '#{pane_id} #{pane_alive}' | grep "$PANE_ID"
+tmux list-panes -t "$TMUX_SESSION" -F '#{pane_id} #{pane_alive}' | grep "$PANE_ID"
 ```
 pane이 없거나 dead이면:
 ```
@@ -167,10 +194,11 @@ SendMessage tool:
 | 에러 | 원인 | 해결 |
 |------|------|------|
 | tmux not found | tmux 미설치 | `sudo apt install tmux` 또는 `brew install tmux` |
-| CLAUDE_CODE_TMUX_SESSION 미설정 | tmux 밖에서 실행 | tmux 세션 내에서 Claude Code 실행 |
+| `$TMUX` 비어있음 | tmux 밖에서 실행 | tmux 세션 내에서 Claude Code 실행 |
 | cli-proxy-api 미응답 | 서버 미실행 | cli-proxy-api 서버 시작 (localhost:8317) |
 | gpt-claude-code 미발견 | 함수 미정의 | `~/.zshrc`에 함수 정의 |
 | Pane 즉시 종료 | 인증/연결 실패 | 토큰, 서버 상태, 함수 수동 테스트 |
+| 리더 pane 너무 작음 | 반복 분할로 공간 부족 | `tmux select-layout main-vertical`로 재배치 |
 
 ## 호출 패턴 (커맨드에서 사용)
 
