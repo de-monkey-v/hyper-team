@@ -68,7 +68,7 @@ Extract from config.json:
 - `name`: Team identifier
 - `created`: Creation timestamp
 - `members`: Array of member objects
-- Member fields: `name`, `role`, `model`, `isActive`, `paneId`
+- Member fields: `name`, `role`, `model`, `isActive`, `tmuxPaneId`
 
 ### 2. Check Member Status
 
@@ -84,7 +84,7 @@ jq '.members[] | select(.name == "worker-1") | .isActive' ~/.claude/teams/{team-
 tmux list-panes -a -F "#{pane_id} #{session_name}:#{window_index}.#{pane_index} cmd=#{pane_current_command}"
 ```
 
-Match the `paneId` from config.json with tmux output to verify the process exists.
+Match the `tmuxPaneId` from config.json with tmux output to verify the process exists.
 
 **Recent Activity (inbox analysis):**
 ```bash
@@ -225,7 +225,7 @@ Recent modifications indicate active task work.
 
 1. **Check tmux pane exists:**
    ```bash
-   tmux list-panes -a | grep {paneId}
+   tmux list-panes -a | grep {tmuxPaneId}
    ```
 
    If not found: Member process crashed or was killed.
@@ -283,7 +283,7 @@ Find panes not in any team config:
 
 ```bash
 # Get all pane IDs from configs
-jq -r '.members[].paneId' ~/.claude/teams/*/config.json | sort > /tmp/config-panes
+jq -r '.members[].tmuxPaneId' ~/.claude/teams/*/config.json | sort > /tmp/config-panes
 
 # Get all tmux pane IDs
 tmux list-panes -a -F "#{pane_id}" | sort > /tmp/tmux-panes

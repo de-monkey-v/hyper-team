@@ -93,16 +93,24 @@ LEAD_SESSION_ID=$(jq -r '.leadSessionId' "$CONFIG")
 TMUX_SESSION=$(tmux display-message -p '#S')
 ```
 
-**4-2. Pane 스폰 (크기 제어 포함):**
+**4-2. 사전 체크 및 Pane 스폰:**
 ```bash
-PANE_ID=$(tmux split-window -t "$TMUX_SESSION" -l 15 -c "$PWD" -dP -F '#{pane_id}' \
+# 터미널 너비 체크
+TERM_WIDTH=$(tmux display-message -p '#{window_width}')
+if [ "$TERM_WIDTH" -lt 120 ]; then
+  echo "⚠️ 터미널 너비가 ${TERM_WIDTH}열입니다 (권장: 120열 이상). pane이 좁을 수 있습니다."
+fi
+
+# Pane 높이 변수화 (환경변수로 오버라이드 가능)
+PANE_HEIGHT=${SPAWN_PANE_HEIGHT:-15}
+
+PANE_ID=$(tmux split-window -t "$TMUX_SESSION" -l $PANE_HEIGHT -c "$PWD" -dP -F '#{pane_id}' \
   "zsh -c 'source ~/.zshrc && gpt-claude-code \
     --agent-id ${NAME}@${TEAM} \
     --agent-name ${NAME} \
     --team-name ${TEAM} \
     --agent-color \"#10A37F\" \
     --parent-session-id ${LEAD_SESSION_ID} \
-    --agent-type claude-team:gpt \
     --model opus \
     --dangerously-skip-permissions'")
 echo "$PANE_ID"
@@ -110,19 +118,22 @@ echo "$PANE_ID"
 
 **4-3. 레이아웃 재조정:**
 
-팀메이트가 2개 이상이면 pane 크기를 균등하게 재배분합니다:
+팀메이트가 2개 이상일 때만 레이아웃을 재배치합니다 (1개일 때 불필요한 flickering 방지):
 ```bash
-tmux select-layout -t "$TMUX_SESSION" main-vertical
+MEMBER_COUNT=$(jq '.members | length' "$CONFIG" 2>/dev/null || echo 0)
+if [ "$MEMBER_COUNT" -ge 2 ]; then
+  tmux select-layout -t "$TMUX_SESSION" main-vertical
+fi
 ```
 
 핵심 플래그 설명:
 - `tmux display-message -p '#S'`: 현재 tmux 세션 이름을 동적으로 감지 (`CLAUDE_CODE_TMUX_SESSION` 환경변수 불필요)
-- `-l 15`: 팀메이트 pane을 15행으로 고정. 리더 pane이 지나치게 축소되는 것을 방지
+- `-l $PANE_HEIGHT`: 팀메이트 pane 높이 (기본 15행, `SPAWN_PANE_HEIGHT` 환경변수로 조정 가능)
 - `-d`: 새 pane으로 포커스 전환하지 않음 (리더 pane 유지)
 - `-P -F '#{pane_id}'`: 생성된 pane ID 반환
 - `source ~/.zshrc`: `gpt-claude-code` 함수 및 환경변수 로드
 - `--model opus`: cli-proxy-api의 환경변수에 의해 `gpt-5.3-codex(high)`로 매핑됨
-- `--agent-type claude-team:gpt`: `agents/gpt.md` 에이전트 설정 로드
+- `gpt-claude-code`: cli-proxy-api 환경변수를 설정하여 claude CLI를 GPT 모델로 직접 실행 (`~/.zshrc` 정의, agent-type 승급 불필요)
 - `--parent-session-id`: 리더와의 메시지 라우팅 연결
 - `--dangerously-skip-permissions`: 자율적 실행 허용
 
@@ -134,42 +145,84 @@ tmux select-layout -t "$TMUX_SESSION" main-vertical
 | 팀메이트 2개+ | 스폰 후 `main-vertical`로 재배치 (리더=왼쪽 전체높이, 팀메이트=우측 row) |
 | 터미널 너비 부족 (<120열) | 최소 너비 40열 보장, 부족 시 경고 |
 
-### Step 5: Config 등록
+### Step 5: Config 등록 (원자적 쓰기)
 
 ```bash
 CONFIG="$HOME/.claude/teams/${TEAM}/config.json"
-jq --arg name "$NAME" --arg agentId "${NAME}@${TEAM}" --arg paneId "$PANE_ID" \
-  '.members += [{
-    "agentId": $agentId, "name": $name,
-    "agentType": "claude-team:gpt", "model": "gpt-5.3-codex(high)",
-    "color": "#10A37F", "tmuxPaneId": $paneId,
-    "backendType": "tmux", "isActive": true,
-    "joinedAt": (now * 1000 | floor), "cwd": env.PWD, "subscriptions": []
-  }]' "$CONFIG" > /tmp/config-tmp-${NAME}.json && mv /tmp/config-tmp-${NAME}.json "$CONFIG"
+LOCKFILE="$HOME/.claude/teams/${TEAM}/.config.lock"
+
+(
+  flock -w 10 200 || { echo "ERROR: Config lock 획득 실패"; exit 1; }
+  jq --arg name "$NAME" --arg agentId "${NAME}@${TEAM}" --arg paneId "$PANE_ID" \
+    '.members += [{
+      "agentId": $agentId, "name": $name,
+      "agentType": "claude-team:gpt", "model": "gpt-5.3-codex(high)",
+      "color": "#10A37F", "tmuxPaneId": $paneId,
+      "backendType": "tmux", "isActive": true,
+      "joinedAt": (now * 1000 | floor), "cwd": env.PWD, "subscriptions": []
+    }]' "$CONFIG" > "${CONFIG}.tmp" && mv "${CONFIG}.tmp" "$CONFIG"
+) 200>"$LOCKFILE"
+
+# 쓰기 후 검증
+REGISTERED=$(jq --arg name "$NAME" '.members[] | select(.name == $name) | .name' "$CONFIG")
+[ -z "$REGISTERED" ] && echo "ERROR: ${NAME} 등록 실패" && tmux kill-pane -t "$PANE_ID" 2>/dev/null
 ```
 
-### Step 6: 스폰 확인
+### Step 6: 스폰 확인 및 Rollback
 
-**6-1. Pane 생존 확인:**
+Rollback 함수 정의:
 ```bash
-tmux list-panes -t "$TMUX_SESSION" -F '#{pane_id} #{pane_alive}' | grep "$PANE_ID"
+_spawn_rollback() {
+  local CONFIG="$1" NAME="$2" TEAM="$3"
+  local LOCKFILE="$HOME/.claude/teams/${TEAM}/.config.lock"
+  (
+    flock -w 5 200
+    jq --arg name "$NAME" '.members = [.members[] | select(.name != $name)]' \
+      "$CONFIG" > "${CONFIG}.tmp" && mv "${CONFIG}.tmp" "$CONFIG"
+  ) 200>"$LOCKFILE"
+  rm -f "$HOME/.claude/teams/${TEAM}/inboxes/${NAME}.json"
+}
 ```
-pane이 없거나 dead이면:
-```
-GPT 팀메이트 pane이 즉시 종료되었습니다.
 
-확인 사항:
-1. cli-proxy-api가 정상 동작하는지: curl http://localhost:8317/
-2. gpt-claude-code 함수의 인증 토큰이 유효한지
-3. tmux 세션에 여유 공간이 있는지
-```
-
-**6-2. 잠시 대기:**
+**Phase 1 (0.5s): Pane 즉시 사망 감지:**
 ```bash
-sleep 2
+sleep 0.5
+if ! tmux list-panes -a -F '#{pane_id}' | grep -q "$PANE_ID"; then
+  echo "ERROR: GPT 팀메이트 pane이 즉시 종료되었습니다."
+  _spawn_rollback "$CONFIG" "$NAME" "$TEAM"
+  echo "Rollback 완료: config에서 ${NAME} 제거됨"
+  echo ""
+  echo "확인 사항:"
+  echo "1. cli-proxy-api가 정상 동작하는지: curl http://localhost:8317/"
+  echo "2. gpt-claude-code 함수의 인증 토큰이 유효한지"
+  echo "3. tmux 세션에 여유 공간이 있는지"
+  exit 1
+fi
 ```
 
-**6-3. 스폰 완료 메시지 표시:**
+**Phase 2 (최대 5s): Agent 프로세스 기동 확인:**
+```bash
+AGENT_READY=false
+for i in $(seq 1 10); do
+  PANE_CMD=$(tmux list-panes -a -F '#{pane_id} #{pane_current_command}' | grep "$PANE_ID" | awk '{print $2}')
+  if [ -z "$PANE_CMD" ]; then
+    echo "ERROR: Pane이 Phase 2에서 종료됨"
+    _spawn_rollback "$CONFIG" "$NAME" "$TEAM"
+    exit 1
+  fi
+  if echo "$PANE_CMD" | grep -qE '^(claude|cc)$'; then
+    AGENT_READY=true
+    break
+  fi
+  sleep 0.5
+done
+
+if [ "$AGENT_READY" != "true" ]; then
+  echo "WARN: Agent 프로세스(claude/cc)가 5초 내 감지되지 않음 (현재: ${PANE_CMD}). 계속 진행합니다."
+fi
+```
+
+**스폰 완료 메시지 표시:**
 ```markdown
 GPT 팀메이트 스폰 완료: ${NAME} (Team: ${TEAM})
 - Model: GPT-5.3 Codex (high) via cli-proxy-api
@@ -199,6 +252,53 @@ SendMessage tool:
 | gpt-claude-code 미발견 | 함수 미정의 | `~/.zshrc`에 함수 정의 |
 | Pane 즉시 종료 | 인증/연결 실패 | 토큰, 서버 상태, 함수 수동 테스트 |
 | 리더 pane 너무 작음 | 반복 분할로 공간 부족 | `tmux select-layout main-vertical`로 재배치 |
+
+## 트러블슈팅
+
+### Pane 즉시 종료
+
+| 원인 | 진단 방법 | 해결 |
+|------|----------|------|
+| cli-proxy-api 미실행 | `curl http://localhost:8317/` | 서버 시작 |
+| 인증 토큰 만료 | `gpt-claude-code --help` 수동 실행 | 토큰 갱신 |
+| `gpt-claude-code` 함수 오류 | `zsh -c 'source ~/.zshrc && type gpt-claude-code'` | 함수 재정의 |
+| tmux 공간 부족 | `tmux list-panes` 확인 | 불필요한 pane 정리 또는 터미널 확대 |
+| 환경변수 미로드 | `source ~/.zshrc` 후 재시도 | `.zshrc` 내 함수/변수 확인 |
+
+### Config 죽은 멤버 수동 정리
+
+config에 `isActive: true`이지만 pane이 없는 멤버가 남아있을 때:
+
+```bash
+# 죽은 멤버 확인
+CONFIG="$HOME/.claude/teams/${TEAM}/config.json"
+jq -r '.members[] | select(.isActive == true) | .tmuxPaneId' "$CONFIG" | while read pane; do
+  tmux list-panes -a -F '#{pane_id}' | grep -q "$pane" || echo "Dead member pane: $pane"
+done
+
+# 특정 멤버 제거
+jq --arg name "dead-member" '.members = [.members[] | select(.name != $name)]' \
+  "$CONFIG" > "${CONFIG}.tmp" && mv "${CONFIG}.tmp" "$CONFIG"
+```
+
+### 동시 스폰 시 멤버 누락 진단
+
+```bash
+# config에 등록된 멤버 수 확인
+jq '.members | length' "$HOME/.claude/teams/${TEAM}/config.json"
+
+# 실제 팀메이트 pane 수 확인
+jq -r '.members[] | .tmuxPaneId' "$HOME/.claude/teams/${TEAM}/config.json" | while read pane; do
+  tmux list-panes -a -F '#{pane_id}' | grep -q "$pane" && echo "OK: $pane" || echo "MISSING: $pane"
+done
+```
+
+### gpt-claude-code 보안 참고
+
+`gpt-claude-code` 함수는 cli-proxy-api를 통해 GPT 모델에 접근합니다:
+- cli-proxy-api의 인증 토큰은 환경변수로 관리됩니다
+- 팀메이트 pane에서 토큰이 노출되지 않도록 `~/.zshrc`에서 환경변수로 주입하세요
+- 프로덕션 환경에서는 credential을 별도 파일이나 시크릿 매니저로 분리하는 것을 권장합니다
 
 ## 호출 패턴 (커맨드에서 사용)
 

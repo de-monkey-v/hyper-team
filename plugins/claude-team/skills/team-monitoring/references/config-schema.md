@@ -86,7 +86,7 @@ Complete specification for `~/.claude/teams/{team-name}/config.json`.
           "type": "boolean",
           "description": "Whether member is currently active"
         },
-        "paneId": {
+        "tmuxPaneId": {
           "type": "string",
           "description": "Tmux pane identifier (e.g., %123)",
           "pattern": "^%[0-9]+$"
@@ -140,7 +140,7 @@ Complete specification for `~/.claude/teams/{team-name}/config.json`.
       "role": "implementer",
       "model": "sonnet",
       "isActive": true,
-      "paneId": "%42",
+      "tmuxPaneId": "%42",
       "sessionInfo": {
         "sessionName": "team-alpha",
         "windowIndex": 0,
@@ -154,7 +154,7 @@ Complete specification for `~/.claude/teams/{team-name}/config.json`.
       "role": "implementer",
       "model": "sonnet",
       "isActive": true,
-      "paneId": "%43",
+      "tmuxPaneId": "%43",
       "sessionInfo": {
         "sessionName": "team-alpha",
         "windowIndex": 0,
@@ -168,7 +168,7 @@ Complete specification for `~/.claude/teams/{team-name}/config.json`.
       "role": "tester",
       "model": "haiku",
       "isActive": true,
-      "paneId": "%44",
+      "tmuxPaneId": "%44",
       "sessionInfo": {
         "sessionName": "team-alpha",
         "windowIndex": 1,
@@ -262,7 +262,7 @@ Complete specification for `~/.claude/teams/{team-name}/config.json`.
 - **Purpose:** Controls whether member receives tasks and messages
 - **Note:** Set to `false` to pause a member without removing them
 
-#### paneId
+#### tmuxPaneId
 - **Type:** string
 - **Required:** Only if active
 - **Format:** `%{number}` (e.g., `%42`)
@@ -341,12 +341,12 @@ jq '(.members[] | select(.name == "member-name") | .isActive) = true' \
 mv /tmp/config.json ~/.claude/teams/{team}/config.json
 ```
 
-### Updating paneId
+### Updating tmuxPaneId
 
 ```bash
 NEW_PANE_ID=$(tmux list-panes -F "#{pane_id}" | tail -n 1)
 jq --arg pane "$NEW_PANE_ID" \
-  '(.members[] | select(.name == "member-name") | .paneId) = $pane' \
+  '(.members[] | select(.name == "member-name") | .tmuxPaneId) = $pane' \
   ~/.claude/teams/{team}/config.json > /tmp/config.json
 mv /tmp/config.json ~/.claude/teams/{team}/config.json
 ```
@@ -379,20 +379,20 @@ jq '.members | map(.name) | group_by(.) | map(select(length > 1))' \
 
 Empty array = all unique, non-empty = duplicates exist.
 
-### Active Member paneId Check
+### Active Member tmuxPaneId Check
 
 ```bash
-jq -r '.members[] | select(.isActive == true and .paneId == null) | .name' \
+jq -r '.members[] | select(.isActive == true and .tmuxPaneId == null) | .name' \
   ~/.claude/teams/{team}/config.json
 ```
 
-Any output = active members missing paneId.
+Any output = active members missing tmuxPaneId.
 
-### paneId Existence Check
+### tmuxPaneId Existence Check
 
 ```bash
 TMUX_PANES=$(tmux list-panes -a -F "#{pane_id}")
-jq -r '.members[] | select(.isActive == true) | .paneId' \
+jq -r '.members[] | select(.isActive == true) | .tmuxPaneId' \
   ~/.claude/teams/{team}/config.json | \
   while read pane; do
     echo "$TMUX_PANES" | grep -q "$pane" || echo "Missing pane: $pane"
@@ -417,7 +417,7 @@ Populate from current tmux state:
 
 ```bash
 jq --arg pane "%42" '
-  (.members[] | select(.paneId == $pane) | .sessionInfo) = {
+  (.members[] | select(.tmuxPaneId == $pane) | .sessionInfo) = {
     sessionName: "team-alpha",
     windowIndex: 0,
     paneIndex: 0
@@ -450,6 +450,6 @@ jq --arg pane "%42" '
    - Include purpose and reasoning in context field
    - Keep context focused and concise
 
-6. **Maintain paneId accuracy:**
+6. **Maintain tmuxPaneId accuracy:**
    - Update immediately after creating/recreating panes
    - Clean up when deactivating members

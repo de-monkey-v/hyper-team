@@ -25,14 +25,14 @@ jq '.members[] | select(.name == "backend-dev")' \
   "role": "implementer",
   "model": "sonnet",
   "isActive": true,
-  "paneId": "%42"
+  "tmuxPaneId": "%42"
 }
 ```
 
 **Issues to check:**
 - ❌ `isActive: false` → Member is deactivated
-- ❌ Missing `paneId` → Process was never started
-- ✅ `isActive: true` with `paneId` → Continue investigation
+- ❌ Missing `tmuxPaneId` → Process was never started
+- ✅ `isActive: true` with `tmuxPaneId` → Continue investigation
 
 #### Step 2: Verify Tmux Process
 
@@ -56,7 +56,7 @@ tmux list-panes -a -F "#{pane_id} #{pane_current_command}" | grep "%42"
 ```bash
 # Clean up config
 jq '(.members[] | select(.name == "backend-dev") | .isActive) = false |
-    (.members[] | select(.name == "backend-dev") | .paneId) = null' \
+    (.members[] | select(.name == "backend-dev") | .tmuxPaneId) = null' \
   ~/.claude/teams/api-dev-team/config.json > /tmp/config.json
 mv /tmp/config.json ~/.claude/teams/api-dev-team/config.json
 
@@ -217,12 +217,12 @@ cat ~/.claude/tasks/$TASK_ID/task.json
 
 ```bash
 # Is owner active?
-jq '.members[] | select(.name == "backend-dev") | {name, isActive, paneId}' \
+jq '.members[] | select(.name == "backend-dev") | {name, isActive, tmuxPaneId}' \
   ~/.claude/teams/api-dev-team/config.json
 ```
 
 **Diagnosis:**
-- ✅ Active with paneId → Owner should be working
+- ✅ Active with tmuxPaneId → Owner should be working
 - ❌ Not active → **Problem: Owner deactivated mid-task**
 
 #### Step 3: Check Owner's Current Activity
@@ -491,9 +491,9 @@ echo "Circular dependency broken: Task A no longer blocked by Task B"
 #### Step 1: List All Configured Pane IDs
 
 ```bash
-# Extract paneIds from all team configs
+# Extract tmuxPaneIds from all team configs
 find ~/.claude/teams -name "config.json" -exec cat {} \; | \
-  jq -r '.members[]? | select(.paneId != null) | .paneId' | \
+  jq -r '.members[]? | select(.tmuxPaneId != null) | .tmuxPaneId' | \
   sort > /tmp/config-panes.txt
 ```
 
@@ -569,7 +569,7 @@ cat > ~/cleanup-orphaned-panes.sh << 'EOF'
 # Find and clean up orphaned Claude Code team member panes
 
 CONFIG_PANES=$(find ~/.claude/teams -name "config.json" -exec cat {} \; | \
-  jq -r '.members[]? | select(.paneId != null) | .paneId' | sort)
+  jq -r '.members[]? | select(.tmuxPaneId != null) | .tmuxPaneId' | sort)
 
 TMUX_PANES=$(tmux list-panes -a -F "#{pane_id} #{pane_current_command}" | \
   grep " cc$" | cut -d' ' -f1 | sort)
@@ -600,7 +600,7 @@ Use this checklist when encountering team issues:
 
 - [ ] Member exists in config.json
 - [ ] Member isActive is true
-- [ ] Member has paneId assigned
+- [ ] Member has tmuxPaneId assigned
 - [ ] Tmux pane with that ID exists
 - [ ] Pane is running `cc` command
 - [ ] Inbox file exists and is writable
@@ -620,7 +620,7 @@ Use this checklist when encountering team issues:
 ### Team Health
 
 - [ ] No orphaned tmux panes
-- [ ] All active members have valid paneIds
+- [ ] All active members have valid tmuxPaneIds
 - [ ] Inbox files under size threshold (< 10MB)
 - [ ] No task dependency cycles
 - [ ] Member utilization balanced
@@ -646,6 +646,6 @@ find ~/.claude/tasks -name "task.json" -exec cat {} \; | \
 
 # Check orphaned panes
 comm -13 \
-  <(find ~/.claude/teams -name "config.json" -exec cat {} \; | jq -r '.members[]? | .paneId' | sort) \
+  <(find ~/.claude/teams -name "config.json" -exec cat {} \; | jq -r '.members[]? | .tmuxPaneId' | sort) \
   <(tmux list-panes -a -F "#{pane_id}" | sort)
 ```

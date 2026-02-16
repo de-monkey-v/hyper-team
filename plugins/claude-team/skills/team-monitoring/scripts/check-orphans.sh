@@ -109,7 +109,7 @@ find "$CLAUDE_TEAMS_DIR" -name "config.json" -type f 2>/dev/null | while read -r
         log_info "  Processing team: $team_name"
     fi
 
-    jq -r '.members[]? | select(.paneId != null) | .paneId' "$config" 2>/dev/null || true
+    jq -r '.members[]? | select(.tmuxPaneId != null) | .tmuxPaneId' "$config" 2>/dev/null || true
 done | sort -u > "$CONFIG_PANES"
 
 config_count=$(wc -l < "$CONFIG_PANES")

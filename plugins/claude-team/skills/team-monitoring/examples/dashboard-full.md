@@ -247,7 +247,7 @@ Task #2 (Completed)
 jq '.' ~/.claude/teams/api-dev-team/config.json
 
 # Extract member information
-jq '.members[] | {name, role, model, isActive, paneId}' \
+jq '.members[] | {name, role, model, isActive, tmuxPaneId}' \
   ~/.claude/teams/api-dev-team/config.json
 ```
 

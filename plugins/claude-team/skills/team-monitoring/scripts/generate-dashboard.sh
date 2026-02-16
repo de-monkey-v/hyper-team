@@ -215,7 +215,7 @@ EOF
 |------|------|-------|--------|---------------|----------------|
 EOF
 
-    jq -r '.members[] | [.name, .role, .model, .isActive, .paneId // ""] | @tsv' "$CONFIG_FILE" | \
+    jq -r '.members[] | [.name, .role, .model, .isActive, .tmuxPaneId // ""] | @tsv' "$CONFIG_FILE" | \
     while IFS=$'\t' read -r name role model is_active pane_id; do
         local status=$(get_member_status "$name" "$is_active" "$pane_id")
         local last_activity=$(get_last_activity "$name")
@@ -339,7 +339,7 @@ EOF
     local health_checks=()
 
     # Check for orphaned panes
-    local config_panes=$(jq -r '.members[]? | select(.paneId != null) | .paneId' "$CONFIG_FILE" | sort)
+    local config_panes=$(jq -r '.members[]? | select(.tmuxPaneId != null) | .tmuxPaneId' "$CONFIG_FILE" | sort)
     local orphan_count=0
     if command -v tmux &>/dev/null && tmux list-sessions &>/dev/null 2>&1; then
         local tmux_panes=$(tmux list-panes -a -F "#{pane_id}" 2>/dev/null | grep "^%[0-9]" || true)
@@ -374,12 +374,12 @@ EOF
         health_checks+=("⚠️ Found $large_inbox_count inbox file(s) over 10MB")
     fi
 
-    # Check active members have paneIds
-    local missing_pane_count=$(jq '[.members[] | select(.isActive == true and .paneId == null)] | length' "$CONFIG_FILE")
+    # Check active members have tmuxPaneIds
+    local missing_pane_count=$(jq '[.members[] | select(.isActive == true and .tmuxPaneId == null)] | length' "$CONFIG_FILE")
     if [[ $missing_pane_count -eq 0 ]]; then
-        health_checks+=("✅ All active members have paneId assigned")
+        health_checks+=("✅ All active members have tmuxPaneId assigned")
     else
-        health_checks+=("⚠️ $missing_pane_count active member(s) missing paneId")
+        health_checks+=("⚠️ $missing_pane_count active member(s) missing tmuxPaneId")
     fi
 
     # Print health checks
