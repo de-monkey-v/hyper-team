@@ -1,13 +1,13 @@
 ---
-description: Multi-LLM 토론 팀 생성. Gemini와 Codex teammate를 스폰하여 다양한 LLM 관점으로 주제를 토론합니다.
-allowed-tools: Bash, Read, AskUserQuestion, Task, TeamCreate, TeamDelete, SendMessage, TaskCreate, TaskUpdate, TaskList
+description: Multi-LLM 토론 팀 생성. Gemini와 GPT teammate를 스폰하여 다양한 LLM 관점으로 주제를 토론합니다.
+allowed-tools: Bash, Read, Write, AskUserQuestion, Task, TeamCreate, TeamDelete, SendMessage, TaskCreate, TaskUpdate, TaskList
 namespace: team
 argument-hint: [topic]
 ---
 
 # Multi-LLM Discussion Workflow
 
-Create a discussion team with Gemini and Codex teammates to analyze a topic from multiple AI perspectives. This command orchestrates team creation, teammate spawning, and facilitates multi-viewpoint discussion.
+Create a discussion team with Gemini and GPT teammates to analyze a topic from multiple AI perspectives. Gemini is spawned via haiku proxy (Task), GPT is spawned natively via tmux (gpt-claude-code). This command orchestrates team creation, teammate spawning, and facilitates multi-viewpoint discussion.
 
 <task-context>
 <plugin-path>./plugins/claude-team</plugin-path>
@@ -83,17 +83,57 @@ Create a discussion team with Gemini and Codex teammates to analyze a topic from
 
 ---
 
+## Phase 2.5: GPT Prerequisites Check
+
+**Goal**: Verify GPT native spawn prerequisites before proceeding.
+
+**Actions**:
+
+1. **Check tmux session availability**:
+
+   Verify `$CLAUDE_CODE_TMUX_SESSION` environment variable exists:
+   ```bash
+   if [ -z "$CLAUDE_CODE_TMUX_SESSION" ]; then
+     echo "ERROR: CLAUDE_CODE_TMUX_SESSION is not set"
+     exit 1
+   fi
+   ```
+
+2. **Check cli-proxy-api is running**:
+
+   ```bash
+   curl -s --connect-timeout 3 http://localhost:8317/
+   ```
+
+   If this fails, cli-proxy-api is not running.
+
+3. **Check gpt-claude-code function exists**:
+
+   ```bash
+   zsh -c 'source ~/.zshrc && type gpt-claude-code'
+   ```
+
+   If this fails, the function is not defined.
+
+4. **On any failure**:
+
+   - Display which prerequisite(s) failed with specific guidance
+   - Clean up team: `TeamDelete("discussion")`
+   - Abort execution
+
+**Output**: All GPT prerequisites verified
+
+---
+
 ## Phase 3: Spawn Teammates
 
-**Goal**: Spawn Gemini and Codex teammates in parallel.
+**Goal**: Spawn Gemini and GPT teammates in parallel.
 
 **Actions**:
 
 1. **Spawn Both Teammates IN PARALLEL**:
 
-   Use Task tool with `run_in_background: true` for both:
-
-   **Gemini Teammate**:
+   **Gemini Teammate** (haiku proxy via Task):
    ```
    Task(
      subagent_type: "claude-team:gemini",
@@ -114,24 +154,59 @@ Create a discussion team with Gemini and Codex teammates to analyze a topic from
    )
    ```
 
-   **Codex Teammate**:
+   **GPT Teammate** (native tmux spawn via Bash):
+
+   Execute the following steps sequentially in a single Bash call:
+
+   ```bash
+   # 1. Create inbox file
+   echo '[]' > ~/.claude/teams/discussion/inboxes/gpt.json
+
+   # 2. Extract leadSessionId from config
+   LEAD_SESSION_ID=$(jq -r '.leadSessionId' ~/.claude/teams/discussion/config.json)
+
+   # 3. Spawn tmux pane
+   PANE_ID=$(tmux split-window -t "$CLAUDE_CODE_TMUX_SESSION" -c "$PWD" -dP -F '#{pane_id}' \
+     "zsh -c 'source ~/.zshrc && gpt-claude-code \
+       --agent-id gpt@discussion \
+       --agent-name gpt \
+       --team-name discussion \
+       --agent-color \"#10A37F\" \
+       --parent-session-id ${LEAD_SESSION_ID} \
+       --agent-type claude-team:gpt \
+       --model sonnet \
+       --dangerously-skip-permissions'")
+
+   # 4. Register member in config.json
+   jq --arg paneId "$PANE_ID" \
+     '.members += [{
+       "agentId": "gpt@discussion", "name": "gpt",
+       "agentType": "claude-team:gpt", "model": "gpt-5.3-codex(high)",
+       "color": "#10A37F", "tmuxPaneId": $paneId,
+       "backendType": "tmux", "isActive": true,
+       "joinedAt": (now * 1000 | floor), "cwd": env.PWD, "subscriptions": []
+     }]' ~/.claude/teams/discussion/config.json > /tmp/config-tmp-gpt.json \
+     && mv /tmp/config-tmp-gpt.json ~/.claude/teams/discussion/config.json
    ```
-   Task(
-     subagent_type: "claude-team:codex",
-     team_name: "discussion",
-     name: "codex",
-     model: "haiku",
-     run_in_background: true,
-     prompt: "You are a discussion teammate. Analyze the following topic and
-             provide your perspective via Codex CLI.
 
-             Discussion topic: {topic}
+   GPT is spawned as a tmux pane, so `run_in_background: true` is NOT needed — tmux handles background execution.
 
-             Please analyze and include:
-             - Key points and insights
-             - Pros and cons if applicable
-             - Your recommendations
-             - Any concerns or considerations"
+   After spawning, send the discussion topic to GPT:
+   ```
+   SendMessage(
+     type: "message",
+     recipient: "gpt",
+     content: "You are a discussion teammate. Analyze the following topic and
+               provide your perspective.
+
+               Discussion topic: {topic}
+
+               Please analyze and include:
+               - Key points and insights
+               - Pros and cons if applicable
+               - Your recommendations
+               - Any concerns or considerations",
+     summary: "토론 주제 전달"
    )
    ```
 
@@ -153,7 +228,7 @@ Create a discussion team with Gemini and Codex teammates to analyze a topic from
 1. **Wait for Responses**:
    - Topic is already included in spawn prompts (Phase 3)
    - No separate broadcast needed
-   - Expected response time: Gemini ~10-30s, Codex ~30-120s
+   - Expected response time: Gemini ~10-30s, GPT ~10-60s
    - Maximum wait: 3 minutes per teammate
    - If only one teammate responds within 3 minutes, present that
      response and note the other teammate timed out
@@ -181,9 +256,9 @@ Create a discussion team with Gemini and Codex teammates to analyze a topic from
 
    ---
 
-   ### ⚡ Codex's Perspective
+   ### ⚡ GPT's Perspective
 
-   {codex response summary or full response}
+   {gpt response summary or full response}
 
    ---
 
@@ -201,9 +276,9 @@ Create a discussion team with Gemini and Codex teammates to analyze a topic from
      SendMessage(recipient: "gemini", content: "Question for Gemini...")
      ```
 
-   - **Ask Codex specifically**:
+   - **Ask GPT specifically**:
      ```
-     SendMessage(recipient: "codex", content: "Question for Codex...")
+     SendMessage(recipient: "gpt", content: "Question for GPT...")
      ```
 
    - **End discussion**:
@@ -214,7 +289,7 @@ Create a discussion team with Gemini and Codex teammates to analyze a topic from
    ### Team Status
 
    - **Team**: discussion
-   - **Members**: gemini (haiku), codex (haiku)
+   - **Members**: gemini (haiku), gpt (gpt-5.3-codex)
    - **Config**: `~/.claude/teams/discussion/config.json`
    - **Inboxes**: `~/.claude/teams/discussion/inboxes/`
    ```
@@ -223,7 +298,7 @@ Create a discussion team with Gemini and Codex teammates to analyze a topic from
 
    ```
    ✅ Discussion team created
-   ✅ Gemini and Codex teammates spawned (topic included in spawn prompts)
+   ✅ Gemini and GPT teammates spawned
    ✅ Responses collected
    ```
 
@@ -241,11 +316,27 @@ If Gemini CLI is not installed:
 3. Abort discussion creation
 4. Clean up team if partially created: `TeamDelete("discussion")`
 
-### Codex CLI Not Found
+### cli-proxy-api Not Running
 
-If Codex CLI is not installed:
-1. Show warning: "Codex CLI not found. Please install it first."
-2. Suggest: `/ai-cli-tools:setup` to install Codex CLI
+If cli-proxy-api is not running (curl to localhost:8317 fails):
+1. Show warning: "cli-proxy-api is not running. GPT teammate requires it."
+2. Suggest: Start cli-proxy-api with `cli-proxy-api` or check if the process is running
+3. Abort discussion creation
+4. Clean up team if partially created: `TeamDelete("discussion")`
+
+### gpt-claude-code Function Not Found
+
+If `gpt-claude-code` function is not defined:
+1. Show warning: "gpt-claude-code function not found."
+2. Suggest: Check `~/.zshrc` for the function definition
+3. Abort discussion creation
+4. Clean up team if partially created: `TeamDelete("discussion")`
+
+### tmux Session Not Available
+
+If `$CLAUDE_CODE_TMUX_SESSION` is not set:
+1. Show warning: "CLAUDE_CODE_TMUX_SESSION is not set. GPT teammate requires tmux."
+2. Suggest: Run `/hyper-team:setup` to configure tmux session, or set the env variable manually
 3. Abort discussion creation
 4. Clean up team if partially created: `TeamDelete("discussion")`
 
@@ -267,7 +358,7 @@ If discussion team already exists:
 ### Teammate Spawn Failure
 
 If any teammate fails to spawn:
-1. Note which teammate failed (gemini or codex)
+1. Note which teammate failed (gemini or gpt)
 2. Show error with details
 3. Ask user:
    - header: "Spawn failed"
@@ -276,6 +367,14 @@ If any teammate fails to spawn:
      - Yes (continue with one teammate)
      - No (abort and clean up)
 4. If continuing with one, adjust Phase 4 to send to available teammate only
+
+### GPT tmux Pane Immediately Exits
+
+If the GPT tmux pane exits immediately after spawning:
+1. Verify cli-proxy-api authentication is working: `curl -s http://localhost:8317/`
+2. Test `gpt-claude-code` function manually in a terminal
+3. Check tmux pane output for error messages: `tmux capture-pane -p -t {pane_id}`
+4. Suggest: Run `gpt-claude-code` manually to diagnose the issue
 
 ### No Response from Teammates
 
@@ -307,12 +406,12 @@ If teammates don't respond within 3 minutes:
 - Include topic directly in spawn prompts (no separate broadcast needed)
 - Show full perspective summaries for clarity
 - Provide clear next-step commands
-- Verify CLI tools availability before spawning
+- Verify cli-proxy-api and gpt-claude-code availability before spawning
 - Use follow-up broadcasts only for NEW questions after initial discussion
 
 **DON'T**:
 - Don't spawn teammates sequentially (use parallel spawning)
-- Don't proceed if CLI tools are missing
+- Don't proceed if prerequisites are missing
 - Don't ignore spawn failures
 - Don't timeout too quickly on responses (allow 3 minutes per teammate)
 - Don't leave orphaned team on failure (clean up)

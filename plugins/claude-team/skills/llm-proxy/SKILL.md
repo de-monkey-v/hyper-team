@@ -1,6 +1,6 @@
 ---
 name: llm-proxy
-description: This skill should be used when the user asks about "external LLM teammate", "codex teammate", "gemini teammate", "proxy teammate", "multi-LLM team", "LLM routing", "LLM proxy", "codex proxy", "프록시 팀메이트", "외부 LLM", or wants to use non-Claude models within Agent Teams. Provides patterns for routing work to external CLI-based LLMs through thin proxy teammates.
+description: This skill should be used when the user asks about "external LLM teammate", "codex teammate", "gemini teammate", "GPT teammate", "proxy teammate", "native teammate", "multi-LLM team", "LLM routing", "LLM proxy", "codex proxy", "GPT native", "gpt-claude-code", "cli-proxy-api", "프록시 팀메이트", "네이티브 팀메이트", "GPT 팀메이트", "외부 LLM", or wants to use non-Claude models within Agent Teams. Provides patterns for routing work to external CLI-based LLMs through thin proxy teammates and native direct spawn via cli-proxy-api.
 version: 1.0.0
 ---
 
@@ -1138,6 +1138,122 @@ If codebase too large:
 - Network connectivity required
 - Rate limiting may apply
 
+## Native Pattern (Direct Spawn)
+
+### Overview
+
+The **Native Pattern** is an alternative to the Thin-Proxy Pattern. Instead of a Haiku proxy relaying to an external CLI tool, the external LLM runs **directly** as a full-capability Agent Teams teammate via environment variable injection.
+
+**Key insight**: If a local proxy server (e.g., `cli-proxy-api`) can translate Claude API calls to another LLM's API, then `claude` CLI can run with the external model as its backend while retaining all Agent Teams tools.
+
+```
+[Proxy Pattern]
+Leader → SendMessage → Haiku proxy → Bash(codex exec) → GPT → result → SendMessage → Leader
+                        ^^^ Extra relay layer (stateless, no tools)
+
+[Native Pattern]
+Leader → SendMessage → GPT teammate (claude + env vars) → direct response → SendMessage → Leader
+                        ^^^ GPT uses all tools natively (stateful, full access)
+```
+
+### Proxy vs Native Comparison
+
+| Aspect | Proxy Pattern | Native Pattern |
+|--------|--------------|----------------|
+| **Model wrapper** | Haiku (thin relay) | None (direct execution) |
+| **Tools available** | Bash, SendMessage only | Read, Write, Edit, Glob, Grep, Bash, SendMessage, TaskList, etc. |
+| **State** | Stateless (each message independent) | Stateful (multi-turn conversation) |
+| **File access** | None (leader must provide content) | Full read/write access |
+| **Cost** | Haiku + external LLM per request | External LLM only |
+| **Complexity** | Simple relay logic | Requires local proxy server |
+| **Setup** | CLI tool + API key | cli-proxy-api + function in ~/.zshrc |
+| **Use case** | Quick opinions, simple Q&A | Complex tasks, file operations, multi-step work |
+
+### Prerequisites
+
+1. **cli-proxy-api**: Local proxy server running on `localhost:8317` that translates Claude API format to the target LLM's API
+2. **gpt-claude-code function**: Shell function (defined in `~/.zshrc`) that sets environment variables to route `claude` CLI through cli-proxy-api
+3. **tmux**: Required for spawning teammate panes
+
+### When to Choose Native Over Proxy
+
+**Use Native Pattern when:**
+- Task requires **file access** (reading, writing, editing code)
+- Task involves **multi-step work** (explore → plan → implement → verify)
+- **Stateful conversation** is needed (follow-up questions, iterative refinement)
+- GPT should **manage tasks** (TaskList, TaskUpdate, TaskCreate)
+- **Codebase search** is required (Glob, Grep)
+- You want to **eliminate proxy overhead** (no Haiku cost)
+
+**Use Proxy Pattern when:**
+- Task is **simple and self-contained** (one question → one answer)
+- No file access needed (opinion, analysis, Q&A)
+- **Quick setup** is preferred (no cli-proxy-api required)
+- Only **CLI tools** are available (codex, gemini commands)
+- **Cost of proxy** is negligible compared to simplicity
+
+### Usage
+
+Spawn a GPT native teammate:
+
+```
+/claude-team:spawn-gpt [member-name] [--team team-name] [--prompt "initial task"]
+```
+
+**Examples:**
+
+```bash
+# Basic spawn
+/claude-team:spawn-gpt
+
+# Named teammate with initial task
+/claude-team:spawn-gpt gpt-reviewer --team my-project --prompt "Review src/auth/ for security issues"
+
+# Multiple GPT teammates
+/claude-team:spawn-gpt gpt-frontend --team fullstack
+/claude-team:spawn-gpt gpt-backend --team fullstack
+```
+
+### Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                     Team Leader (Claude)                         │
+└────────────────────────────┬────────────────────────────────────┘
+                             │ SendMessage
+                             ▼
+┌─────────────────────────────────────────────────────────────────┐
+│           GPT Native Teammate (claude CLI + env vars)           │
+│  ┌──────────────────────────────────────────────────────────┐   │
+│  │ Full Agent Teams tools:                                  │   │
+│  │ • Read, Write, Edit (file operations)                    │   │
+│  │ • Glob, Grep (codebase search)                           │   │
+│  │ • Bash (command execution)                               │   │
+│  │ • SendMessage (team communication)                       │   │
+│  │ • TaskList, TaskGet, TaskUpdate (task management)        │   │
+│  │ • WebSearch, WebFetch (web access)                       │   │
+│  └──────────────────────────────────────────────────────────┘   │
+└────────────────────────────┬────────────────────────────────────┘
+                             │ API calls via env vars
+                             ▼
+┌─────────────────────────────────────────────────────────────────┐
+│              cli-proxy-api (localhost:8317)                      │
+│     Translates Claude API format → GPT-5.3 Codex API            │
+└────────────────────────────┬────────────────────────────────────┘
+                             │ HTTP/gRPC
+                             ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                    GPT-5.3 Codex Service                        │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Related Components
+
+- **Agent**: `agents/gpt.md` - GPT native teammate agent definition
+- **Command**: `commands/spawn-gpt.md` - Spawn command implementation
+
+---
+
 ## See Also
 
 ### Reference Files
@@ -1155,3 +1271,7 @@ If codebase too large:
 
 ### Related Agents
 - **`team-architect`** - Designs teams with appropriate proxy members
+- **`gpt`** - GPT-5.3 Codex native teammate (direct spawn via cli-proxy-api)
+
+### Related Commands
+- **`spawn-gpt`** - Spawn GPT native teammate in tmux

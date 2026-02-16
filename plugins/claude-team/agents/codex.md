@@ -51,7 +51,7 @@ Extract the core topic and any specific questions to construct the Codex prompt.
 For simple discussion prompts:
 
 ```bash
-codex exec "You are participating in a technical discussion. Topic: {topic}
+codex exec --dangerously-bypass-approvals-and-sandbox "You are participating in a technical discussion. Topic: {topic}
 
 Provide your analysis covering:
 1. Key points and observations
@@ -66,7 +66,7 @@ Be concise and structured."
 For complex topics with context:
 
 ```bash
-cat <<'EOF' | codex exec -s read-only -
+cat <<'EOF' | codex exec --dangerously-bypass-approvals-and-sandbox -s read-only -
 You are participating in a technical discussion.
 
 Discussion Topic: {topic}
@@ -96,7 +96,7 @@ EOF
 When discussing code quality/architecture:
 
 ```bash
-cat <<'EOF' | codex exec -s read-only -
+cat <<'EOF' | codex exec --dangerously-bypass-approvals-and-sandbox -s read-only -
 Review and provide architectural perspective on this code.
 
 {code}
@@ -137,7 +137,7 @@ EOF
 
 **You construct:**
 ```bash
-cat <<'EOF' | codex exec -s read-only -
+cat <<'EOF' | codex exec --dangerously-bypass-approvals-and-sandbox -s read-only -
 Provide your architectural perspective on the following topic.
 
 Topic: Microservices Architecture for E-commerce Platform
@@ -224,7 +224,7 @@ fi
 **Tier 1**: 120초 타임아웃으로 전체 프롬프트 실행
 
 ```bash
-output=$(timeout 120s codex exec -s read-only "..." 2>&1)
+output=$(timeout 120s codex exec --dangerously-bypass-approvals-and-sandbox -s read-only "..." 2>&1)
 exit_code=$?
 ```
 
@@ -232,7 +232,7 @@ exit_code=$?
 
 ```bash
 if [ $exit_code -eq 124 ]; then
-  output=$(timeout 120s codex exec -s read-only "간단히 답해주세요: {핵심질문}" 2>&1)
+  output=$(timeout 120s codex exec --dangerously-bypass-approvals-and-sandbox -s read-only "간단히 답해주세요: {핵심질문}" 2>&1)
   exit_code=$?
 fi
 ```
@@ -256,7 +256,7 @@ fi
 ### General CLI Failure
 
 ```bash
-output=$(codex exec "..." 2>&1)
+output=$(codex exec --dangerously-bypass-approvals-and-sandbox -s read-only "..." 2>&1)
 exit_code=$?
 
 if [ $exit_code -ne 0 ]; then
@@ -363,7 +363,7 @@ Note: This topic may be outside Codex's primary strengths (code generation, tech
 </approach>
 <output>
 ```bash
-cat <<'EOF' | codex exec -s read-only -
+cat <<'EOF' | codex exec --dangerously-bypass-approvals-and-sandbox -s read-only -
 Provide your API architecture perspective on the following topic.
 
 Topic: REST vs GraphQL for API Design
@@ -434,7 +434,7 @@ Formatted response:
 </approach>
 <output>
 ```bash
-cat <<'EOF' | codex exec -s read-only -
+cat <<'EOF' | codex exec --dangerously-bypass-approvals-and-sandbox -s read-only -
 Provide a security review perspective.
 
 Review this authentication code for security issues:
