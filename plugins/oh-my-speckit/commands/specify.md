@@ -11,6 +11,8 @@ Agent Teams 기반으로 팀을 구성하고, 팀메이트에게 분석/조사�
 
 **핵심 원칙**:
 - **리더(이 커맨드)는 사용자와 소통하고 팀을 조율** - 코드베이스 직접 분석 금지
+- **높은 자율성**: 리더는 고수준 목표만 전달, 팀메이트가 세부사항 자율 결정
+- **팀메이트 간 직접 소통**: 팀메이트끼리 SendMessage로 직접 협업
 - **중요 결정만 질문** (기술 선택, Breaking Change 등)
 - **세부사항은 AI가 결정**
 - **요약 중심 출력** (전체 문서는 저장 시에만)
@@ -45,7 +47,7 @@ Phase 5: 팀 해산 + 완료 안내
 | 0 | 4 | 태스크 등록 | TaskCreate |
 | 1 | 1 | 팀 생성 | TeamCreate |
 | 1 | 2 | role-templates 참조하여 팀 구성 판단 | Skill |
-| 1 | 3 | 팀메이트 생성 (pm, architect 등) | Task (team_name) |
+| 1 | 3 | 팀메이트 스폰 (pm, architect 등) | Skill (spawn-teammate) |
 | 4 | 2 | 사용자 승인 후 파일 저장 | Write |
 | 5 | 1 | 팀 해산 | SendMessage (shutdown), TeamDelete |
 
@@ -124,18 +126,11 @@ ls -1d ${PROJECT_ROOT}/.specify/specs/${NEXT_ID}-* 2>/dev/null
 - 출력 없음 → 사용 가능
 - 출력 있음 → NEXT_ID를 +1 증가 후 재검증
 
-### Step 2.7: LLM 모드 설정
+### Step 2.7: 스폰 모드 설정
 
 arguments에서 `--gpt` 옵션 확인:
-- `--gpt` 포함 → GPT_MODE = true
-- 기본값 → GPT_MODE = false
-
-| GPT_MODE | 스폰 방식 |
-|----------|---------|
-| false (기본) | Task tool + `subagent_type: "general-purpose"` |
-| true (`--gpt`) | `Skill: claude-team:spawn-teammate` + SendMessage |
-
-**GPT 모드**: 각 팀메이트를 spawn-teammate Skill로 생성한 뒤, SendMessage로 초기 작업을 지시합니다.
+- `--gpt` 포함 → GPT_MODE = true (spawn-teammate에 --agent-type 없이 호출)
+- 기본값 → GPT_MODE = false (spawn-teammate에 --agent-type 지정)
 
 ### Step 3: 기존 태스크 정리
 
@@ -199,189 +194,87 @@ Skill tool:
 | Medium | 복합 기능, 파일 5-15개 | pm + architect |
 | Large | 대규모 기능, 파일 15개+ | pm + architect + critic |
 
-### Step 3: 팀메이트 생성 (병렬)
+### Step 3: 팀메이트 스폰 (병렬)
 
-role-templates 스킬의 프롬프트 템플릿을 사용하여 팀메이트 생성:
+spawn-teammate Skill로 팀메이트를 스폰한 뒤, SendMessage로 고수준 목표를 전달합니다.
+팀메이트는 자율적으로 세부 분석을 수행하고, 필요시 팀메이트 간 직접 소통합니다.
 
-**pm 생성 (필수):**
+**역할-에이전트 매핑:**
 
-**기본 모드:**
-```
-Task tool:
-- subagent_type: "general-purpose"
-- team_name: "specify-{spec-id}"
-- name: "pm"
-- description: "요구사항 분석 + 제품 관점"
-- prompt: |
-    너는 제품 기획자(PM)이다.
+| 역할 | 에이전트 타입 (Claude 모드) |
+|------|--------------------------|
+| pm | claude-team:planner |
+| architect | claude-team:architect |
+| critic | claude-team:reviewer |
 
-    **임무:**
-    1. 사용자 요청을 분석하여 사용자 스토리(US), 기능 요구사항(FR), 비기능 요구사항(NFR), 엣지 케이스(EC)를 도출
-    2. 필요시 Context7, WebSearch를 사용하여 관련 기술 문서를 조사
-    3. 불명확한 요구사항을 식별하고 명확화 질문 목록 작성
+**pm 스폰 (필수):**
 
-    **제품 관점:**
-    4. "이 기능이 사용자에게 어떤 가치를 주는가?" — 사용자 가치 중심 사고
-    5. "MVP에 꼭 필요한 범위는?" — 최소 핵심 범위 판단
-    6. 우선순위 분류: P1(필수) / P2(중요) / P3(선택)
-
-    **사용자 요청:** {사용자 요청 원문}
-
-    **constitution.md 규칙:** {constitution 내용 또는 "없음"}
-
-    **출력 형식:**
-    ## 요구사항 분석 결과
-    ### 사용자 가치
-    - [이 기능의 핵심 가치 한 줄]
-    ### MVP 범위 판단
-    - P1(필수): [항목]
-    - P2(중요): [항목]
-    - P3(선택): [항목]
-    ### 요구사항
-    - US-NNN: As a [user], I want [goal] so that [benefit]
-    - FR-NNN: [검증 가능한 기능 요구사항] (P1/P2/P3)
-    - NFR-NNN: [측정 가능한 비기능 요구사항]
-    - EC-NNN: [경계 조건/엣지 케이스]
-    ### 불명확 사항
-    - [목록]
-
-    작업 완료 시 반드시 SendMessage로 리더에게 결과를 보고하세요.
-```
-
-**GPT 모드 (`--gpt`):**
 ```
 Skill tool:
 - skill: "claude-team:spawn-teammate"
-- args: "pm --team specify-{spec-id}"
+- args: "pm --team specify-{spec-id} --agent-type claude-team:planner"
+  (GPT_MODE일 때: "pm --team specify-{spec-id}")
 
 → 스폰 완료 후:
 SendMessage tool:
 - type: "message"
 - recipient: "pm"
 - content: |
-    [위 Task tool의 prompt와 동일 내용]
-- summary: "pm 초기 작업 지시"
+    사용자가 다음 기능을 요청했습니다: {사용자 요청 원문}
+
+    프로젝트 루트: {PROJECT_ROOT}
+    constitution 규칙: {constitution 내용 또는 "없음"}
+
+    이 기능에 대한 요구사항을 분석하고 US/FR/NFR/EC로 구조화해주세요.
+    architect 팀메이트가 있으면 기술적 타당성을 협의하세요.
+    완료되면 리더에게 결과를 보고해주세요.
+- summary: "pm 작업 지시"
 ```
 
-**architect 생성 (Medium 이상):**
+**architect 스폰 (Medium 이상):**
 
-**기본 모드:**
-```
-Task tool:
-- subagent_type: "general-purpose"
-- team_name: "specify-{spec-id}"
-- name: "architect"
-- description: "코드베이스 분석 + 설계 정합성"
-- prompt: |
-    너는 소프트웨어 아키텍트이다.
-
-    **임무:**
-    [코드베이스 분석]
-    1. 프로젝트 디렉토리 구조 분석
-    2. 기존 아키텍처 패턴 식별
-    3. 재사용 가능한 유틸리티/컴포넌트/타입 목록 작성
-    4. 유사 기능의 기존 구현 패턴 파악
-    5. 코딩 컨벤션 파악
-
-    [설계 정합성]
-    6. 기능 요구사항과 기존 아키텍처 간 정합성 분석
-    7. Breaking Change 가능성 평가
-    8. 구현 계획 초안 작성 (Phase 분류, FR 매핑)
-
-    **아키텍처 결정 기록(ADR) 관점:**
-    - 각 설계 결정에 대해 "왜 이 방식인가?"를 명시
-    - 고려한 대안과 선택 이유 기록
-
-    **프로젝트 루트:** {PROJECT_ROOT}
-    **분석 대상 기능:** {사용자 요청 요약}
-
-    **출력 형식:**
-    ## 아키텍처 분석 결과
-    ### 디렉토리 구조
-    ### 아키텍처 패턴
-    ### 재사용 가능 코드
-    | 코드 | 위치 | 재사용 방법 |
-    ### 기존 패턴 + 컨벤션
-    ### 설계 결정 (ADR)
-    | 결정 | 선택 | 대안 | 이유 |
-    ### 정합성 분석
-    ### Breaking Change 분석
-
-    작업 완료 시 반드시 SendMessage로 리더에게 결과를 보고하세요.
-```
-
-**GPT 모드 (`--gpt`):**
 ```
 Skill tool:
 - skill: "claude-team:spawn-teammate"
-- args: "architect --team specify-{spec-id}"
+- args: "architect --team specify-{spec-id} --agent-type claude-team:architect"
+  (GPT_MODE일 때: "architect --team specify-{spec-id}")
 
 → 스폰 완료 후:
 SendMessage tool:
 - type: "message"
 - recipient: "architect"
 - content: |
-    [위 Task tool의 prompt와 동일 내용]
-- summary: "architect 초기 작업 지시"
+    사용자가 다음 기능을 요청했습니다: {사용자 요청 요약}
+
+    프로젝트 루트: {PROJECT_ROOT}
+
+    코드베이스를 분석하고 아키텍처 관점에서 이 기능의 설계 방향을 제안해주세요.
+    pm 팀메이트와 요구사항의 기술적 타당성을 협의하세요.
+    완료되면 리더에게 결과를 보고해주세요.
+- summary: "architect 작업 지시"
 ```
 
-**critic 생성 (Large만):**
+**critic 스폰 (Large만):**
 
-**기본 모드:**
-```
-Task tool:
-- subagent_type: "general-purpose"
-- team_name: "specify-{spec-id}"
-- name: "critic"
-- description: "Devil's Advocate 비판적 검토"
-- prompt: |
-    너는 Devil's Advocate(악마의 변호인)이다.
-
-    **임무:**
-    팀의 설계 결정과 요구사항 분석을 비판적 시각으로 검토한다.
-    "이것이 정말 최선인가?"를 끊임없이 질문한다.
-
-    **검토 관점:**
-    1. 대안 존재 여부: "더 단순한 방법은 없는가?"
-    2. 리스크 식별: "이 접근의 잠재적 문제는?"
-    3. 누락 검증: "빠뜨린 요구사항/엣지 케이스는?"
-    4. 과잉 설계: "이게 정말 필요한 복잡도인가?"
-    5. 사용자 관점: "실제 사용자가 이렇게 쓸까?"
-
-    **프로젝트 루트:** {PROJECT_ROOT}
-    **분석 대상 기능:** {사용자 요청 요약}
-
-    **출력 형식:**
-    ## Devil's Advocate Review
-    ### 도전 질문 (반드시 3개 이상)
-    - [질문 1]: [근거]
-    - [질문 2]: [근거]
-    - [질문 3]: [근거]
-    ### 리스크 식별
-    | 리스크 | 영향도 | 발생 가능성 | 대응 방안 |
-    ### 대안 제안
-    | 현재 접근 | 대안 | 장점 | 단점 |
-    ### 누락 항목
-    - [누락된 요구사항/엣지 케이스]
-    ### 최종 판정: APPROVE / CONCERN / REJECT
-    - 판정 근거: [한 줄]
-
-    작업 완료 시 반드시 SendMessage로 리더에게 결과를 보고하세요.
-```
-
-**GPT 모드 (`--gpt`):**
 ```
 Skill tool:
 - skill: "claude-team:spawn-teammate"
-- args: "critic --team specify-{spec-id}"
+- args: "critic --team specify-{spec-id} --agent-type claude-team:reviewer"
+  (GPT_MODE일 때: "critic --team specify-{spec-id}")
 
 → 스폰 완료 후:
 SendMessage tool:
 - type: "message"
 - recipient: "critic"
 - content: |
-    [위 Task tool의 prompt와 동일 내용]
-- summary: "critic 초기 작업 지시"
+    사용자가 다음 기능을 요청했습니다: {사용자 요청 요약}
+
+    프로젝트 루트: {PROJECT_ROOT}
+
+    pm과 architect의 분석 결과를 비판적으로 검토해주세요.
+    팀메이트들과 직접 소통하여 도전 질문, 리스크, 대안을 논의하세요.
+    완료되면 리더에게 Devil's Advocate Review를 보고해주세요.
+- summary: "critic 작업 지시"
 ```
 
 ### Step 4: 팀메이트 결과 수집

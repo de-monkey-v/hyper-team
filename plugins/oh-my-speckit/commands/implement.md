@@ -1,6 +1,6 @@
 ---
 description: plan.md 기반 코드 구현 (Agent Teams, 자동/대화형)
-argument-hint: [spec-id] [--interactive]
+argument-hint: [spec-id] [--interactive] [--gpt]
 allowed-tools: Read, Write, Edit, Grep, Glob, Bash, AskUserQuestion, Task, Skill, TaskCreate, TaskUpdate, TaskList, TeamCreate, TeamDelete, SendMessage
 ---
 
@@ -14,6 +14,8 @@ Agent Teams 기반으로 팀을 구성하고, 팀메이트에게 구현/테스�
 - **모든 코드 작성/수정은 팀메이트(developer, qa)가 수행**
 - **Phase Group 단위로 구현 -> 검증 반복**
 - **자동 모드(기본): 에러 시에만 중단 / 대화형 모드: Group별 확인**
+- **높은 자율성**: 리더는 고수준 목표만 전달, 팀메이트가 세부사항 자율 결정
+- **팀메이트 간 직접 소통**: developer와 qa가 SendMessage로 직접 협업
 
 **Spec ID:** {{arguments}}
 
@@ -35,7 +37,7 @@ Phase 0: 초기화 (Spec/Plan 로드, 모드 선택, 진행 상황 확인)
      ↓
 Phase 1: 팀 구성 + 구현 계획 확인
      ↓
-Phase 2: 구현 루프 (Group별: developer 코딩 → qa 검증)
+Phase 2: 구현 루프 (Group별: developer 코딩 + qa 검증 — 직접 소통)
      ↓
 Phase 3: 통합 테스트
      ↓
@@ -51,9 +53,8 @@ Phase 4: 마무리 (완료 요약, 팀 해산)
 | 0 | 3 | 기존 태스크 정리 | TaskList, TaskUpdate |
 | 0 | 4 | 태스크 등록 | TaskCreate |
 | 1 | 1 | 팀 생성 | TeamCreate |
-| 1 | 3 | 팀메이트 생성 (developer, qa 등) | Task (team_name) |
-| 2 | 2 | 코드 구현 위임 | SendMessage to developer |
-| 2 | 3 | 즉시 검증 위임 | SendMessage to qa |
+| 1 | 3 | 팀메이트 스폰 (developer, qa 등) | Skill (spawn-teammate) |
+| 2 | 2 | 구현 + 검증 지시 | SendMessage to developer |
 | 3 | 1 | 전체 테스트 위임 | SendMessage to qa |
 | 4 | 2 | 팀 해산 | SendMessage (shutdown), TeamDelete |
 
@@ -79,8 +80,14 @@ code-generation 스킬의 지식(기존 코드 우선 원칙, 패턴 준수)을 
 ### Step 2: Spec/Plan 로드
 
 **Spec ID 파싱:**
-- arguments에서 spec-id 추출 (`--interactive` 옵션 제거)
+- arguments에서 spec-id 추출 (`--interactive`, `--gpt` 옵션 제거)
 - `--interactive` 포함 -> AUTO_MODE = false
+
+**스폰 모드 설정:**
+
+arguments에서 `--gpt` 옵션 확인:
+- `--gpt` 포함 → GPT_MODE = true (spawn-teammate에 `--agent-type` 없이 호출)
+- 기본값 → GPT_MODE = false (spawn-teammate에 `--agent-type` 지정)
 
 **spec-id 미지정 시:**
 ```
@@ -184,19 +191,6 @@ plan.md의 규모(변경 파일 수, Phase 수)를 기반으로 판단:
 | Medium | 파일 5-15개, Phase 4-6개 | developer x2 + qa |
 | Large | 파일 15개+, Phase 7개+ | architect + developer x2 + qa |
 
-**LLM 모드 설정:**
-
-arguments에서 `--gpt` 옵션 확인:
-- `--gpt` 포함 → GPT_MODE = true
-- 기본값 → GPT_MODE = false
-
-| GPT_MODE | 스폰 방식 |
-|----------|---------|
-| false (기본) | Task tool + `subagent_type: "general-purpose"` |
-| true (`--gpt`) | `Skill: claude-team:spawn-teammate` + SendMessage |
-
-**GPT 모드**: 각 팀메이트를 spawn-teammate Skill로 생성한 뒤, SendMessage로 초기 작업을 지시합니다.
-
 ### Step 2.5: Fullstack 프로젝트 감지
 
 Medium/Large에서 developer x2가 필요한 경우, fullstack 프로젝트 여부를 판단:
@@ -213,235 +207,161 @@ Medium/Large에서 developer x2가 필요한 경우, fullstack 프로젝트 여�
 - FE + BE 디렉토리 모두 존재 → fullstack → developer x2 대신 **frontend-dev + backend-dev**
 - 그 외 → **developer + developer-2** (동일 역할 병렬화)
 
-### Step 3: 팀메이트 생성
+### Step 3: 팀메이트 스폰
+
+모든 팀메이트는 spawn-teammate Skill로 생성합니다. GPT_MODE에 따라 `--agent-type` 포함 여부만 달라집니다.
+
+**역할-에이전트 매핑:**
+
+| 역할 | 에이전트 타입 |
+|------|-------------|
+| developer | claude-team:implementer |
+| frontend-dev | claude-team:frontend |
+| backend-dev | claude-team:backend |
+| developer-2 | claude-team:implementer (2nd instance) |
+| qa | claude-team:tester |
+| architect | claude-team:architect |
+
+---
 
 **developer 생성 (필수 — non-fullstack):**
 
-**기본 모드:**
-```
-Task tool:
-- subagent_type: "general-purpose"
-- team_name: "implement-{spec-id}"
-- name: "developer"
-- description: "코드 구현"
-- prompt: |
-    너는 코드 구현 전문가이다.
-
-    **임무:**
-    1. plan.md의 체크리스트 순서대로 구현
-    2. "재사용 분석" 섹션을 먼저 확인 - 기존 코드 import 가능하면 새로 작성 금지
-    3. 기존 코드 패턴과 컨벤션을 그대로 따라 작성
-    4. 완료된 항목은 plan.md 체크박스 업데이트 ([ ] -> [x])
-
-    **금지 사항:**
-    - 기존 유틸 함수 재작성
-    - 기존 타입과 동일한 타입 재정의
-    - 기존 패턴과 다른 새 패턴 도입
-
-    **plan.md 경로:** ${PROJECT_ROOT}/.specify/specs/{spec-id}/plan.md
-
-    리더의 지시에 따라 작업을 수행합니다.
-    작업 완료 시 반드시 SendMessage로 리더에게 결과를 보고하세요.
-```
-
-**GPT 모드 (`--gpt`):**
 ```
 Skill tool:
 - skill: "claude-team:spawn-teammate"
-- args: "developer --team implement-{spec-id}"
+- args: "developer --team implement-{spec-id} --agent-type claude-team:implementer"
+  (GPT_MODE일 때: "developer --team implement-{spec-id}")
 
 → 스폰 완료 후:
 SendMessage tool:
 - type: "message"
 - recipient: "developer"
 - content: |
-    [위 Task tool의 prompt와 동일 내용]
-- summary: "developer 초기 작업 지시"
+    plan.md 경로: ${PROJECT_ROOT}/.specify/specs/{spec-id}/plan.md
+
+    plan.md의 체크리스트를 순서대로 구현해주세요.
+    재사용 분석 섹션을 먼저 확인하고, 기존 코드 패턴을 따르세요.
+    완료된 항목은 plan.md 체크박스를 업데이트해주세요.
+    qa 팀메이트와 구현 완료 시 검증을 협의하세요.
+    완료되면 리더에게 변경 파일 목록과 결과를 보고해주세요.
+- summary: "developer 작업 지시"
 ```
 
 **frontend-dev 생성 (fullstack 프로젝트, Medium 이상):**
 
-**기본 모드:**
-```
-Task tool:
-- subagent_type: "general-purpose"
-- team_name: "implement-{spec-id}"
-- name: "frontend-dev"
-- description: "프론트엔드 구현"
-- prompt: |
-    너는 프론트엔드 구현 전문가이다.
-
-    **임무:**
-    1. plan.md의 체크리스트 중 프론트엔드 관련 항목을 순서대로 구현
-    2. "재사용 분석" 섹션을 먼저 확인 - 기존 코드 import 가능하면 새로 작성 금지
-    3. 기존 코드 패턴과 컨벤션을 그대로 따라 작성
-    4. 완료된 항목은 plan.md 체크박스 업데이트 ([ ] -> [x])
-
-    **담당 영역:** UI 컴포넌트, 페이지, 클라이언트 상태 관리, API 호출 레이어
-
-    **금지 사항:**
-    - 기존 유틸 함수 재작성
-    - 기존 타입과 동일한 타입 재정의
-    - 기존 패턴과 다른 새 패턴 도입
-    - 백엔드 코드 직접 수정 (backend-dev 담당)
-
-    **plan.md 경로:** ${PROJECT_ROOT}/.specify/specs/{spec-id}/plan.md
-
-    리더의 지시에 따라 작업을 수행합니다.
-    작업 완료 시 반드시 SendMessage로 리더에게 결과를 보고하세요.
-```
-
-**GPT 모드 (`--gpt`):**
 ```
 Skill tool:
 - skill: "claude-team:spawn-teammate"
-- args: "frontend-dev --team implement-{spec-id}"
+- args: "frontend-dev --team implement-{spec-id} --agent-type claude-team:frontend"
+  (GPT_MODE일 때: "frontend-dev --team implement-{spec-id}")
 
 → 스폰 완료 후:
 SendMessage tool:
 - type: "message"
 - recipient: "frontend-dev"
 - content: |
-    [위 Task tool의 prompt와 동일 내용]
-- summary: "frontend-dev 초기 작업 지시"
+    plan.md 경로: ${PROJECT_ROOT}/.specify/specs/{spec-id}/plan.md
+
+    plan.md의 체크리스트 중 프론트엔드 관련 항목을 순서대로 구현해주세요.
+    재사용 분석 섹션을 먼저 확인하고, 기존 코드 패턴을 따르세요.
+    담당 영역: UI 컴포넌트, 페이지, 클라이언트 상태 관리, API 호출 레이어
+    백엔드 코드는 직접 수정하지 마세요 (backend-dev 담당).
+    완료된 항목은 plan.md 체크박스를 업데이트해주세요.
+    qa 팀메이트와 구현 완료 시 검증을 협의하세요.
+    완료되면 리더에게 변경 파일 목록과 결과를 보고해주세요.
+- summary: "frontend-dev 작업 지시"
 ```
 
 **backend-dev 생성 (fullstack 프로젝트, Medium 이상):**
 
-**기본 모드:**
-```
-Task tool:
-- subagent_type: "general-purpose"
-- team_name: "implement-{spec-id}"
-- name: "backend-dev"
-- description: "백엔드 구현"
-- prompt: |
-    너는 백엔드 구현 전문가이다.
-
-    **임무:**
-    1. plan.md의 체크리스트 중 백엔드 관련 항목을 순서대로 구현
-    2. "재사용 분석" 섹션을 먼저 확인 - 기존 코드 import 가능하면 새로 작성 금지
-    3. 기존 코드 패턴과 컨벤션을 그대로 따라 작성
-    4. 완료된 항목은 plan.md 체크박스 업데이트 ([ ] -> [x])
-
-    **담당 영역:** API 엔드포인트, 비즈니스 로직, DB 스키마/쿼리, 인증/인가
-
-    **금지 사항:**
-    - 기존 유틸 함수 재작성
-    - 기존 타입과 동일한 타입 재정의
-    - 기존 패턴과 다른 새 패턴 도입
-    - 프론트엔드 코드 직접 수정 (frontend-dev 담당)
-
-    **plan.md 경로:** ${PROJECT_ROOT}/.specify/specs/{spec-id}/plan.md
-
-    리더의 지시에 따라 작업을 수행합니다.
-    작업 완료 시 반드시 SendMessage로 리더에게 결과를 보고하세요.
-```
-
-**GPT 모드 (`--gpt`):**
 ```
 Skill tool:
 - skill: "claude-team:spawn-teammate"
-- args: "backend-dev --team implement-{spec-id}"
+- args: "backend-dev --team implement-{spec-id} --agent-type claude-team:backend"
+  (GPT_MODE일 때: "backend-dev --team implement-{spec-id}")
 
 → 스폰 완료 후:
 SendMessage tool:
 - type: "message"
 - recipient: "backend-dev"
 - content: |
-    [위 Task tool의 prompt와 동일 내용]
-- summary: "backend-dev 초기 작업 지시"
+    plan.md 경로: ${PROJECT_ROOT}/.specify/specs/{spec-id}/plan.md
+
+    plan.md의 체크리스트 중 백엔드 관련 항목을 순서대로 구현해주세요.
+    재사용 분석 섹션을 먼저 확인하고, 기존 코드 패턴을 따르세요.
+    담당 영역: API 엔드포인트, 비즈니스 로직, DB 스키마/쿼리, 인증/인가
+    프론트엔드 코드는 직접 수정하지 마세요 (frontend-dev 담당).
+    완료된 항목은 plan.md 체크박스를 업데이트해주세요.
+    qa 팀메이트와 구현 완료 시 검증을 협의하세요.
+    완료되면 리더에게 변경 파일 목록과 결과를 보고해주세요.
+- summary: "backend-dev 작업 지시"
 ```
 
 **developer-2 생성 (non-fullstack, Medium 이상):**
-- name: "developer-2"
-- 동일한 프롬프트, 별도 Phase Group 담당
 
-**qa 생성 (필수):**
-
-**기본 모드:**
-```
-Task tool:
-- subagent_type: "general-purpose"
-- team_name: "implement-{spec-id}"
-- name: "qa"
-- description: "테스트 + 품질 검증"
-- prompt: |
-    너는 QA 엔지니어이다.
-
-    **임무:**
-    [테스트]
-    1. 변경된 코드에 대한 테스트 작성
-    2. Given-When-Then 패턴 적용
-    3. 성공 케이스 + 실패 케이스 + 경계값 케이스 포함
-    4. 테스트 실행 및 커버리지 확인 (목표: >= 80%)
-    5. 기존 테스트 패턴과 컨벤션 따르기
-
-    **필수 케이스:**
-    - 성공 케이스 (Happy Path)
-    - 실패 케이스 (유효성 검증, 비즈니스 규칙, 404/403)
-    - 경계값 (null, empty, min/max)
-
-    **통합 테스트 시:** flushAndClear() 후 Repository로 DB 검증
-
-    [코드 품질]
-    6. 타입 체크, 린트 체크
-    7. 코드 스멜 탐지
-
-    리더의 지시에 따라 작업을 수행합니다.
-    작업 완료 시 반드시 SendMessage로 리더에게 결과를 보고하세요.
-```
-
-**GPT 모드 (`--gpt`):**
 ```
 Skill tool:
 - skill: "claude-team:spawn-teammate"
-- args: "qa --team implement-{spec-id}"
+- args: "developer-2 --team implement-{spec-id} --agent-type claude-team:implementer"
+  (GPT_MODE일 때: "developer-2 --team implement-{spec-id}")
+
+→ 스폰 완료 후:
+SendMessage tool:
+- type: "message"
+- recipient: "developer-2"
+- content: |
+    plan.md 경로: ${PROJECT_ROOT}/.specify/specs/{spec-id}/plan.md
+
+    plan.md의 체크리스트를 순서대로 구현해주세요.
+    재사용 분석 섹션을 먼저 확인하고, 기존 코드 패턴을 따르세요.
+    완료된 항목은 plan.md 체크박스를 업데이트해주세요.
+    qa 팀메이트와 구현 완료 시 검증을 협의하세요.
+    완료되면 리더에게 변경 파일 목록과 결과를 보고해주세요.
+- summary: "developer-2 작업 지시"
+```
+
+**qa 생성 (필수):**
+
+```
+Skill tool:
+- skill: "claude-team:spawn-teammate"
+- args: "qa --team implement-{spec-id} --agent-type claude-team:tester"
+  (GPT_MODE일 때: "qa --team implement-{spec-id}")
 
 → 스폰 완료 후:
 SendMessage tool:
 - type: "message"
 - recipient: "qa"
 - content: |
-    [위 Task tool의 prompt와 동일 내용]
-- summary: "qa 초기 작업 지시"
+    plan.md 경로: ${PROJECT_ROOT}/.specify/specs/{spec-id}/plan.md
+
+    developer 팀메이트가 구현을 완료하면 검증해주세요.
+    developer와 직접 소통하여 변경 파일과 검증 범위를 확인하세요.
+    타입 체크, 린트, 테스트 작성/실행, 커버리지를 확인해주세요.
+    완료되면 리더에게 검증 결과를 보고해주세요.
+- summary: "qa 작업 지시"
 ```
 
 **architect 생성 (Large만):**
 
-**기본 모드:**
-```
-Task tool:
-- subagent_type: "general-purpose"
-- team_name: "implement-{spec-id}"
-- name: "architect"
-- description: "구현 통합 조율"
-- prompt: |
-    너는 소프트웨어 아키텍트이다.
-
-    **임무:**
-    1. developer들의 작업 간 충돌 방지
-    2. 공통 인터페이스/타입 사전 정의
-    3. 통합 시점에서 일관성 검증
-    4. 아키텍처 패턴 준수 확인
-
-    리더의 지시에 따라 작업을 수행합니다.
-    작업 완료 시 반드시 SendMessage로 리더에게 결과를 보고하세요.
-```
-
-**GPT 모드 (`--gpt`):**
 ```
 Skill tool:
 - skill: "claude-team:spawn-teammate"
-- args: "architect --team implement-{spec-id}"
+- args: "architect --team implement-{spec-id} --agent-type claude-team:architect"
+  (GPT_MODE일 때: "architect --team implement-{spec-id}")
 
 → 스폰 완료 후:
 SendMessage tool:
 - type: "message"
 - recipient: "architect"
 - content: |
-    [위 Task tool의 prompt와 동일 내용]
-- summary: "architect 초기 작업 지시"
+    plan.md 경로: ${PROJECT_ROOT}/.specify/specs/{spec-id}/plan.md
+
+    developer들의 작업 간 충돌을 방지하고 공통 인터페이스/타입을 사전 정의해주세요.
+    통합 시점에서 일관성을 검증하고 아키텍처 패턴 준수를 확인해주세요.
+    developer, qa 팀메이트와 직접 소통하여 협업하세요.
+    완료되면 리더에게 결과를 보고해주세요.
+- summary: "architect 작업 지시"
 ```
 
 ### Step 4: Plan에서 구현 계획 추출 및 Phase Group 분류
@@ -473,14 +393,13 @@ plan.md에서 구현 단계를 추출하고 논리적 그룹으로 분류:
 
 ## Phase 2: 구현 루프
 
-각 Phase Group에 대해 반복:
+각 Phase Group에 대해 반복. 리더는 Group 시작만 알리고, developer와 qa가 직접 소통합니다.
 
 ```
 ┌──────────────────────────────────────────────────────┐
 │  Step 1: 현재 Group 표시                               │
-│  Step 2: developer에게 구현 지시 (SendMessage)         │
-│  Step 3: qa에게 검증 지시 (SendMessage)                │
-│  Step 4: 결과 확인 + 피드백                             │
+│  Step 2: 구현 + 검증 지시 (developer에게 SendMessage)  │
+│  Step 3: 결과 확인 + 피드백                             │
 │  (모든 Group 완료 시 Phase 3로)                         │
 └──────────────────────────────────────────────────────┘
 ```
@@ -502,67 +421,30 @@ plan.md에서 구현 단계를 추출하고 논리적 그룹으로 분류:
 - src/utils/xxx.ts (생성)
 ```
 
-### Step 2: developer에게 구현 지시
+### Step 2: 구현 + 검증 지시
+
+리더는 developer에게만 지시합니다. developer가 구현 완료 후 qa에게 직접 검증을 요청합니다.
 
 ```
 SendMessage tool:
 - type: "message"
 - recipient: "developer"  (또는 "frontend-dev"/"backend-dev")
 - content: |
-    **Phase Group N 구현 요청**
+    **Phase Group N 구현 시작**
 
-    **plan.md 경로:** ${PROJECT_ROOT}/.specify/specs/{spec-id}/plan.md
+    대상 Phase: Phase X, Y
+    plan.md 경로: ${PROJECT_ROOT}/.specify/specs/{spec-id}/plan.md
 
-    **설계 방향:** [plan.md에서 추출]
-    **재사용 분석:** [plan.md에서 추출]
-
-    **대상 Phase:**
-    - Phase X: [제목]
-    - Phase Y: [제목]
-
-    **필수 확인:**
-    - plan.md의 "재사용 분석" 섹션 먼저 확인
-    - 기존 코드 import 가능하면 새로 작성 금지
-    - 기존 패턴 따르기
-    - 완료 항목은 plan.md 체크박스 업데이트 ([ ] -> [x])
-
-    완료 후 SendMessage로 변경 파일 목록과 결과를 보고해주세요.
-- summary: "Group N 구현 요청"
+    구현 완료 후 qa 팀메이트에게 검증을 요청하세요.
+    검증 통과 후 리더에게 결과를 보고해주세요.
+- summary: "Group N 구현 시작"
 ```
 
-**developer 결과 수신 대기.**
+**developer와 qa의 결과 보고 대기.**
 
-### Step 3: qa에게 검증 지시
+> 리더는 developer와 qa 사이의 중계 역할을 하지 않습니다. 에러 발생 시에만 개입합니다.
 
-developer 완료 후:
-
-```
-SendMessage tool:
-- type: "message"
-- recipient: "qa"
-- content: |
-    **Phase Group N 검증 요청**
-
-    **변경 파일:** [developer가 보고한 파일 목록]
-
-    **검증 항목:**
-    1. 변경된 코드의 타입 체크
-    2. 린트 체크
-    3. 단위 테스트 작성 (성공/실패/경계값 케이스)
-    4. 테스트 실행
-
-    **테스트 케이스 필수:**
-    - 성공 케이스 (Happy Path)
-    - 실패 케이스 (유효성 검증, 비즈니스 규칙)
-    - 경계값 (null, empty, min/max)
-
-    완료 후 SendMessage로 결과를 보고해주세요.
-- summary: "Group N 테스트 요청"
-```
-
-**qa 결과 수신 대기.**
-
-### Step 4: 결과 확인 및 피드백
+### Step 3: 결과 확인 및 피드백
 
 #### 자동 모드
 
@@ -602,7 +484,7 @@ SendMessage tool:
     에러 내용: [에러 메시지]
     대상 파일: [에러 발생 파일]
 
-    에러를 수정하고 결과를 보고해주세요.
+    에러를 수정하고 qa에게 재검증을 요청한 뒤 결과를 보고해주세요.
 - summary: "에러 수정 요청"
 ```
 
@@ -621,7 +503,7 @@ AskUserQuestion:
 
 #### "수정 필요" 선택 시 (대화형)
 
-사용자의 수정 요청을 developer에게 SendMessage로 전달 -> 수정 후 qa 재검증.
+사용자의 수정 요청을 developer에게 SendMessage로 전달 -> developer가 수정 후 qa에게 직접 재검증 요청.
 
 #### "테스트 보완" 선택 시 (대화형)
 
@@ -636,7 +518,7 @@ AskUserQuestion:
   (완료된 Phase는 스킵됨)
 ```
 
-### Step 5: 전 Group 완료 후 체크박스 확인
+### Step 4: 전 Group 완료 후 체크박스 확인
 
 모든 Group 완료 후 plan.md 체크박스 진행률 확인:
 
