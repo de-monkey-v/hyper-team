@@ -1,6 +1,6 @@
 ---
 description: plan.md 기반 코드 구현 (Agent Teams, 자동/대화형)
-argument-hint: [spec-id] [--interactive] [--gpt] [--window]
+argument-hint: [spec-id] [--interactive] [--gpt] [--no-gpt] [--window] [--no-window]
 allowed-tools: Read, Write, Edit, Grep, Glob, Bash, AskUserQuestion, Task, Skill, TaskCreate, TaskUpdate, TaskList, TeamCreate, TeamDelete, SendMessage
 ---
 
@@ -85,13 +85,28 @@ code-generation 스킬의 지식(기존 코드 우선 원칙, 패턴 준수)을 
 
 **스폰 모드 설정:**
 
-arguments에서 `--gpt` 옵션 확인:
-- `--gpt` 포함 → GPT_MODE = true (spawn-teammate에 `--agent-type` 없이 호출)
-- 기본값 → GPT_MODE = false (spawn-teammate에 `--agent-type` 지정)
+**Config 읽기:**
+```
+Read tool: ${PROJECT_ROOT}/.specify/config.json
+```
+파일이 없거나 읽기 실패 시 `{}` 으로 간주.
 
-arguments에서 `--window` 옵션 확인:
-- `--window` 포함 → WINDOW_MODE = true (spawn-teammate에 --window 전달)
-- 기본값 → WINDOW_MODE = false
+**GPT_MODE 결정 (우선순위: CLI > config > default):**
+1. arguments에 `--gpt` 포함 → GPT_MODE = true
+2. arguments에 `--no-gpt` 포함 → GPT_MODE = false
+3. 위 둘 다 없으면 → config의 `spawnGpt` 필드가 `true` → GPT_MODE = true
+4. 기본값 → GPT_MODE = false
+
+GPT_MODE일 때: spawn-teammate에 `--agent-type` 없이 호출
+GPT_MODE 아닐 때: spawn-teammate에 `--agent-type` 지정
+
+**WINDOW_MODE 결정 (우선순위: CLI > config > default):**
+1. arguments에 `--window` 포함 → WINDOW_MODE = true
+2. arguments에 `--no-window` 포함 → WINDOW_MODE = false
+3. 위 둘 다 없으면 → config의 `spawnWindow` 필드가 `true` → WINDOW_MODE = true
+4. 기본값 → WINDOW_MODE = false
+
+WINDOW_MODE일 때: spawn-teammate에 `--window` 전달
 
 **spec-id 미지정 시:**
 ```

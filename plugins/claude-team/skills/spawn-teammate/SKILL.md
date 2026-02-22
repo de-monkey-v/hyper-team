@@ -191,25 +191,6 @@ fi
 PANE_HEIGHT=${SPAWN_PANE_HEIGHT:-15}
 ```
 
-**4-2.5. 윈도우 모드 변수 계산 (`--window` 지정 시):**
-
-`--window` 옵션이 지정된 경우에만 실행하는 사전 계산 블록입니다:
-
-```bash
-MEMBER_COUNT=$(jq '.members | length' "$CONFIG" 2>/dev/null || echo 0)
-WINDOW_INDEX=$(( (MEMBER_COUNT / 2) + 1 ))
-POSITION_IN_WINDOW=$(( MEMBER_COUNT % 2 ))  # 0=새 윈도우, 1=기존 분할
-WINDOW_NAME="${TEAM}-${WINDOW_INDEX}"
-```
-
-| MEMBER_COUNT | WINDOW_INDEX | POSITION | 동작 |
-|-------------|-------------|----------|------|
-| 0 | 1 | 0 | 새 윈도우 `{TEAM}-1` 생성 |
-| 1 | 1 | 1 | `{TEAM}-1`에서 수평 분할 |
-| 2 | 2 | 0 | 새 윈도우 `{TEAM}-2` 생성 |
-| 3 | 2 | 1 | `{TEAM}-2`에서 수평 분할 |
-| 4 | 3 | 0 | 새 윈도우 `{TEAM}-3` 생성 |
-
 **4-3. 모드별 Pane 스폰:**
 
 #### 기본 모드 (`--window` 미지정)
@@ -336,37 +317,60 @@ tmux set-option -p -t "$PANE_ID" @agent_label "${NAME}"
 
 GPT/Claude 모드의 **명령어(command)**는 기본 모드와 동일하며, **tmux 배치 방식**만 달라집니다.
 
-**윈도우 모드 - 새 윈도우 (POSITION_IN_WINDOW == 0):**
+**윈도우 배치 + Pane 생성 (원자적):**
+
+아래 단일 bash 블록은 flock으로 보호하여, 병렬 스폰에서도 윈도우당 2명 배치를 보장합니다.
+`"command"` 부분에는 기본 모드의 GPT/Claude 명령어가 그대로 들어갑니다.
 
 ```bash
-# 방어적 체크: 윈도우가 이미 존재하면 분할로 fallback
-if tmux list-windows -t "${TMUX_SESSION}" -F '#{window_name}' | grep -q "^${WINDOW_NAME}$"; then
-  EXISTING_PANES=$(tmux list-panes -t "${TMUX_SESSION}:${WINDOW_NAME}" | wc -l)
-  if [ "$EXISTING_PANES" -ge 2 ]; then
-    WINDOW_INDEX=$((WINDOW_INDEX + 1))
-    WINDOW_NAME="${TEAM}-${WINDOW_INDEX}"
+WINDOW_LOCKFILE="$HOME/.claude/teams/${TEAM}/.window.lock"
+
+SPAWN_RESULT=$(
+(
+  flock -w 30 200 || { echo "LOCK_FAIL"; exit 1; }
+
+  # tmux 상태 기반 윈도우 배치 결정 (config 대신 실제 윈도우 조회)
+  LAST_LINE=$(tmux list-windows -t "${TMUX_SESSION}" -F '#{window_name} #{window_panes}' 2>/dev/null \
+    | grep "^${TEAM}-[0-9]" \
+    | while read name panes; do echo "${name#${TEAM}-} $panes"; done \
+    | sort -n | tail -1)
+
+  if [ -z "$LAST_LINE" ]; then
+    WIN_IDX=1; POS=0
   else
-    POSITION_IN_WINDOW=1  # 분할로 전환
+    LAST_IDX=$(echo "$LAST_LINE" | awk '{print $1}')
+    LAST_PANES=$(echo "$LAST_LINE" | awk '{print $2}')
+    if [ "$LAST_PANES" -ge 2 ]; then
+      WIN_IDX=$((LAST_IDX + 1)); POS=0
+    else
+      WIN_IDX=$LAST_IDX; POS=1
+    fi
   fi
-fi
+  WIN_NAME="${TEAM}-${WIN_IDX}"
 
-# 새 윈도우 생성 (POSITION_IN_WINDOW == 0일 때)
-PANE_ID=$(tmux new-window -t "${TMUX_SESSION}" -n "${WINDOW_NAME}" -c "$PWD" -dP -F '#{pane_id}' "command")
-```
+  if [ "$POS" -eq 0 ]; then
+    PANE_ID=$(tmux new-window -t "${TMUX_SESSION}" -n "${WIN_NAME}" -c "$PWD" -dP -F '#{pane_id}' "command")
+  else
+    TARGET=$(tmux list-panes -t "${TMUX_SESSION}:${WIN_NAME}" -F '#{pane_id}' | head -1)
+    PANE_ID=$(tmux split-window -h -t "$TARGET" -c "$PWD" -dP -F '#{pane_id}' "command")
+  fi
 
-**윈도우 모드 - 기존 윈도우 분할 (POSITION_IN_WINDOW == 1):**
+  echo "${PANE_ID}|${WIN_NAME}"
+) 200>"$WINDOW_LOCKFILE"
+)
 
-```bash
-TARGET_PANE=$(tmux list-panes -t "${TMUX_SESSION}:${WINDOW_NAME}" -F '#{pane_id}' | head -1)
-PANE_ID=$(tmux split-window -h -t "$TARGET_PANE" -c "$PWD" -dP -F '#{pane_id}' "command")
+PANE_ID=$(echo "$SPAWN_RESULT" | head -1 | cut -d'|' -f1)
+WINDOW_NAME=$(echo "$SPAWN_RESULT" | head -1 | cut -d'|' -f2)
+echo "$PANE_ID"
+tmux set-option -p -t "$PANE_ID" @agent_label "${NAME}"
 ```
 
 핵심 차이점:
-- `tmux new-window -n "${WINDOW_NAME}"`: 팀 이름 기반 윈도우 이름
+- `flock`: 병렬 스폰 시 윈도우 배치를 원자적으로 보호
+- `tmux list-windows`: config.json 대신 실제 tmux 상태로 윈도우/pane 수 조회
+- `tmux new-window -n "${WIN_NAME}"`: 팀 이름 기반 윈도우 이름
 - `tmux split-window -h`: 수평 분할 (side-by-side)
 - `-d` 플래그: 리더 윈도우에 포커스 유지
-
-위의 `"command"` 부분에는 기본 모드의 GPT/Claude 명령어가 그대로 들어갑니다.
 
 **4-4. Pane Border 활성화 및 레이아웃 재조정:**
 
