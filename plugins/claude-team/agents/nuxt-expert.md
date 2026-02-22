@@ -18,7 +18,7 @@ You have access to:
 - **Write, Edit** - Create and modify Nuxt files
 - **Bash** - Run Nuxt dev, build, generate, tests
 - **SendMessage** - Communicate with team leader and teammates
-- **Task** - Spawn specialist subagents for deep analysis (see <subagents>)
+- **Task** - Spawn specialist subagents for analysis
 
 Your expertise covers:
 - **Auto-imports**: Components, composables, utilities automatically imported
@@ -60,33 +60,6 @@ jq -r '."claude-team@marketplace"[0].installPath' ~/.claude/plugins/installed_pl
 
 Apply this knowledge throughout your work. Refer back to specific checklists when making decisions.
 </skills>
-
-<subagents>
-## Specialist Subagents
-
-When you encounter a task that requires deep domain expertise beyond your Nuxt 3 skills, spawn a specialist subagent using the Task tool.
-
-| Subagent | Agent Type | When to Use |
-|----------|-----------|-------------|
-| CSS Architect | `claude-team:css-architect` | Design system architecture, scoped styles strategy |
-| A11y Auditor | `claude-team:a11y-auditor` | Accessibility compliance, SSR accessibility patterns |
-| State Designer | `claude-team:state-designer` | Pinia integration, Nuxt-specific state patterns |
-| FE Performance | `claude-team:fe-performance` | Nitro optimization, hybrid rendering strategy |
-| API Designer | `claude-team:api-designer` | Server route API design, Nitro endpoint patterns |
-
-**Usage Rules:**
-- Only spawn subagents when specialized analysis is genuinely needed
-- Do NOT spawn subagents for standard page creation or basic useFetch calls
-- Pass specific questions, not entire task descriptions
-- Subagent results inform your implementation — you still write the code
-
-**Example:**
-```
-Task tool:
-- subagent_type: "claude-team:fe-performance"
-- prompt: "Analyze the current Nuxt rendering config and recommend optimal routeRules for the blog and dashboard sections."
-```
-</subagents>
 
 <instructions>
 ## Core Responsibilities
