@@ -116,6 +116,11 @@ TaskCreate (4 times):
    activeForm: "Finalizing"
 ```
 
+Set task dependencies via TaskUpdate after creation:
+- Phase 2 addBlockedBy: [Phase 1 task ID]
+- Phase 3 addBlockedBy: [Phase 2 task ID]
+- Phase 4 addBlockedBy: [Phase 3 task ID]
+
 ---
 
 ## Phase 1: Plan Design
@@ -140,6 +145,12 @@ AskUserQuestion:
     description: "./{plugin-name}/"
   - label: "Custom path"
     description: "Enter your desired path"
+```
+
+### Step 1.5: Ensure Plans Directory
+
+```
+Bash: mkdir -p ~/.claude/plans/
 ```
 
 ### Step 2: Call plan-designer
@@ -214,11 +225,11 @@ Task tool:
 
     <instructions>
     Verify that the plan conforms to Claude Code official specifications:
-    - Skill frontmatter format (description required)
-    - Agent frontmatter required fields (name, description)
-    - Agent does not include Task tool (agents cannot call other agents)
-    - Command frontmatter format (description, allowed-tools)
-    - Hook event type validity (PreToolUse, PostToolUse, SessionStart, Stop, etc.)
+    - Skill frontmatter format (required: description; optional: name, argument-hint, allowed-tools, model, context, agent, hooks, disable-model-invocation, user-invocable)
+    - Agent frontmatter required fields (required: name, description; optional: tools, disallowedTools, model, permissionMode, maxTurns, skills, mcpServers, hooks, memory, background, isolation)
+    - Subagent nesting constraint (subagents cannot spawn other subagents; listing Task tool in subagent tools has no effect at runtime)
+    - Command frontmatter format (required: description; optional: name, allowed-tools, argument-hint, model, context, agent, hooks, disable-model-invocation, user-invocable)
+    - Hook event type validity (valid events: PreToolUse, PostToolUse, PostToolUseFailure, PermissionRequest, UserPromptSubmit, Stop, SubagentStop, SubagentStart, SessionStart, SessionEnd, PreCompact, Notification, TeammateIdle, TaskCompleted, ConfigChange, WorktreeCreate, WorktreeRemove)
 
     If there are issues, provide the corrections needed.
     If no issues, respond with "Specification validation passed".
@@ -429,11 +440,11 @@ Task tool:
 
     <instructions>
     Validate created components against official documentation:
-    - Is skill SKILL.md frontmatter format correct?
-    - Do agent .md frontmatter have required fields? (name, description)
-    - Is command .md frontmatter format correct? (description, allowed-tools)
-    - Are hooks.json event types valid?
-    - Do agents NOT contain Task tool?
+    - Is skill SKILL.md frontmatter format correct? (required: description; valid optional: name, argument-hint, allowed-tools, model, context, agent, hooks, disable-model-invocation, user-invocable)
+    - Do agent .md frontmatter have required fields? (required: name, description; valid optional: tools, disallowedTools, model, permissionMode, maxTurns, skills, mcpServers, hooks, memory, background, isolation)
+    - Is command .md frontmatter format correct? (required: description; valid optional: name, allowed-tools, argument-hint, model, context, agent, hooks, disable-model-invocation, user-invocable)
+    - Are hooks.json event types valid? (valid: PreToolUse, PostToolUse, PostToolUseFailure, PermissionRequest, UserPromptSubmit, Stop, SubagentStop, SubagentStart, SessionStart, SessionEnd, PreCompact, Notification, TeammateIdle, TaskCompleted, ConfigChange, WorktreeCreate, WorktreeRemove)
+    - Do agents respect the subagent nesting constraint? (subagents cannot spawn other subagents)
 
     If there are issues, provide fix instructions.
     </instructions>
@@ -605,8 +616,9 @@ plan-designer clarifies with strategic questions
 {agent-name} agent call failed.
 
 Options:
-- Retry
+- Retry (maximum 2 retries per agent call)
 - Discuss alternative approach
+- Cancel operation (mark remaining tasks as completed and exit)
 ```
 
 ### Specification validation failure
