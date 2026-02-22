@@ -216,6 +216,7 @@ PANE_ID=$(tmux split-window -t "${TMUX_SESSION}:${LEADER_WINDOW}" -l $PANE_HEIGH
     --dangerously-skip-permissions'")
 echo "$PANE_ID"
 tmux set-option -p -t "$PANE_ID" @agent_label "${NAME}"
+tmux set-option -p -t "$PANE_ID" @agent_color "#10A37F"
 ```
 
 핵심 플래그 설명:
@@ -300,6 +301,7 @@ PANE_ID=$(tmux split-window -t "${TMUX_SESSION}:${LEADER_WINDOW}" -l $PANE_HEIGH
       --dangerously-skip-permissions")
 echo "$PANE_ID"
 tmux set-option -p -t "$PANE_ID" @agent_label "${NAME}"
+tmux set-option -p -t "$PANE_ID" @agent_color "${COLOR}"
 ```
 
 핵심 플래그 설명:
@@ -363,6 +365,7 @@ PANE_ID=$(echo "$SPAWN_RESULT" | head -1 | cut -d'|' -f1)
 WINDOW_NAME=$(echo "$SPAWN_RESULT" | head -1 | cut -d'|' -f2)
 echo "$PANE_ID"
 tmux set-option -p -t "$PANE_ID" @agent_label "${NAME}"
+tmux set-option -p -t "$PANE_ID" @agent_color "${COLOR}"
 ```
 
 핵심 차이점:
@@ -376,13 +379,18 @@ tmux set-option -p -t "$PANE_ID" @agent_label "${NAME}"
 
 ```bash
 MEMBER_COUNT=$(jq '.members | length' "$CONFIG" 2>/dev/null || echo 0)
+LEADER_COLOR="#FFD700"
 
-# 첫 번째 팀메이트일 때: border 활성화 + 리더 pane 타이틀 설정
+# 첫 번째 팀메이트일 때: border 활성화 + 리더 pane 타이틀/색상 설정
 if [ "$MEMBER_COUNT" -eq 0 ]; then
   tmux set-option -w pane-border-status bottom
-  tmux set-option -w pane-border-format "#{?@agent_label, #{@agent_label} | #{pane_title}, #{pane_title}}"
-  # 리더 pane에도 타이틀 설정
+  tmux set-option -w pane-border-format \
+    "#{?@agent_label, #[fg=#{@agent_color}]#{@agent_label}#[default] | #{pane_title}, #{pane_title}}"
+  tmux set-option -w pane-border-style "fg=#585858"
+  tmux set-option -w pane-active-border-style "fg=#AAAAAA,bold"
+  # 리더 pane에도 타이틀 및 색상 설정
   tmux set-option -p -t "$LEADER_PANE_ID" @agent_label "LEADER"
+  tmux set-option -p -t "$LEADER_PANE_ID" @agent_color "${LEADER_COLOR}"
 fi
 
 # 팀메이트가 2개 이상일 때만 레이아웃을 재배치합니다 (1개일 때 불필요한 flickering 방지)
@@ -397,7 +405,10 @@ fi
 
 ```bash
 tmux set-option -w -t "${TMUX_SESSION}:${WINDOW_NAME}" pane-border-status bottom
-tmux set-option -w -t "${TMUX_SESSION}:${WINDOW_NAME}" pane-border-format "#{?@agent_label, #{@agent_label} | #{pane_title}, #{pane_title}}"
+tmux set-option -w -t "${TMUX_SESSION}:${WINDOW_NAME}" pane-border-format \
+  "#{?@agent_label, #[fg=#{@agent_color}]#{@agent_label}#[default] | #{pane_title}, #{pane_title}}"
+tmux set-option -w -t "${TMUX_SESSION}:${WINDOW_NAME}" pane-border-style "fg=#585858"
+tmux set-option -w -t "${TMUX_SESSION}:${WINDOW_NAME}" pane-active-border-style "fg=#AAAAAA,bold"
 ```
 
 #### Pane 크기 전략
