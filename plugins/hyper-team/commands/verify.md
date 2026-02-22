@@ -1,7 +1,7 @@
 ---
 name: verify
 description: Verify implementation against a todo spec. Runs tests, analyzes code quality, checks git status, and provides a comprehensive score. Specify NNN-subject or just NNN.
-allowed-tools: Bash, Read, Write, Edit, Glob, Grep, WebSearch, AskUserQuestion, Task, TeamCreate, TeamDelete, SendMessage, TaskCreate, TaskUpdate, TaskList, TaskGet
+allowed-tools: Bash, Read, Write, Edit, Glob, Grep, WebSearch, AskUserQuestion, Task, Skill, TeamCreate, TeamDelete, SendMessage, TaskCreate, TaskUpdate, TaskList, TaskGet
 ---
 
 Create a team. Verify the implementation specified in a hyper-team todo file.
@@ -53,6 +53,12 @@ If no todo files exist, inform the user:
 No todo files found. Use `/hyper-team:make-prompt` to create one first.
 ```
 
+### Spawn Mode
+
+arguments에서 `--gpt` 옵션 확인:
+- `--gpt` 포함 → GPT_MODE = true (spawn-teammate에 `--agent-type` 없이 호출)
+- 기본값 → GPT_MODE = false (spawn-teammate에 `--agent-type` 지정)
+
 ---
 
 ## Phase 2: Parse Requirements
@@ -75,170 +81,137 @@ Store these in your context for team task creation.
 <instructions>
 Create a team with 3 teammates to perform verification in parallel.
 
-Spawn the following teammates:
+```
+TeamCreate tool:
+- team_name: "verify-{todo-id}"
+- description: "Verify {todo-id}: 구현 검증"
+```
+
+Spawn teammates using spawn-teammate Skill, then send task instructions via SendMessage.
 </instructions>
 
 ### Teammate 1: tester
 
-<task>
-Run build and tests with exit code capture, verify functional requirements against the acceptance criteria in the todo spec.
-</task>
+```
+Skill tool:
+- skill: "claude-team:spawn-teammate"
+- args: "tester --team verify-{todo-id} --agent-type claude-team:tester"
+  (GPT_MODE일 때: "tester --team verify-{todo-id}")
 
-<instructions>
-1. Read the spec file to understand acceptance criteria.
+→ 스폰 완료 후:
+SendMessage tool:
+- type: "message"
+- recipient: "tester"
+- content: |
+    **검증 대상:** {todo-file-path}
 
-2. **Detect package manager:**
-   ```
-   Bash: if [ -f "pnpm-lock.yaml" ]; then echo "PM=pnpm"; elif [ -f "yarn.lock" ]; then echo "PM=yarn"; else echo "PM=npm"; fi
-   ```
-   Use the detected PM for all subsequent commands.
+    다음을 수행해주세요:
+    1. spec 파일을 읽고 acceptance criteria를 파악하세요.
+    2. 패키지 매니저를 감지하세요 (pnpm-lock.yaml → pnpm, yarn.lock → yarn, 기본 → npm).
+    3. 빌드 실행: `$PM run build 2>&1; echo "BUILD_EXIT_CODE=$?"`
+       - BUILD_EXIT_CODE != 0이면 CRITICAL 실패로 표시, 테스트 건너뛰기.
+    4. 테스트 실행: `$PM test 2>&1; echo "TEST_EXIT_CODE=$?"`
+    5. 각 acceptance criterion을 확인하세요.
+    6. 리더에게 다음 형식으로 보고해주세요:
+       ## Tester Report
+       ### Exit Codes
+       - BUILD_EXIT_CODE: {값}
+       - TEST_EXIT_CODE: {값}
+       ### Test Output (last 20 lines)
+       ```
+       {테스트 출력}
+       ```
+       ### Acceptance Criteria
+       | # | Criterion | Result | Evidence |
+       |---|-----------|--------|----------|
+       ### Judgment
+       - Build: PASS/FAIL
+       - Tests: PASS/FAIL
 
-3. Find existing test files:
-   ```
-   Glob: **/*.{test,spec}.{ts,tsx,js,jsx,py}
-   ```
-
-4. **Run build** (if `build` script exists in package.json):
-   ```
-   Bash: $PM run build 2>&1; echo "BUILD_EXIT_CODE=$?"
-   ```
-   - If `BUILD_EXIT_CODE != 0` → mark build as CRITICAL failure, skip test execution, report immediately.
-
-5. **Run tests** (if build passed or no build script):
-   ```
-   Bash: $PM test 2>&1; echo "TEST_EXIT_CODE=$?"
-   ```
-   Do NOT use `||` chains between package managers. Use the single detected PM.
-
-6. If a dev server can be started, start it and verify the feature works:
-   ```
-   Bash: timeout 30 $PM run dev 2>&1 &
-   ```
-
-7. Check each acceptance criterion from the spec.
-
-8. **Report to leader in this exact structure:**
-
-   ```
-   ## Tester Report
-
-   ### Exit Codes
-   - BUILD_EXIT_CODE: {0 or N, or N/A if no build script}
-   - TEST_EXIT_CODE: {0 or N, or N/A if no tests}
-
-   ### Build Output (if failed)
-   ```
-   {raw build error output}
-   ```
-
-   ### Test Output (last 20 lines)
-   ```
-   {raw test output — last 20 lines}
-   ```
-
-   ### Acceptance Criteria
-   | # | Criterion | Result | Evidence |
-   |---|-----------|--------|----------|
-   | 1 | {criterion} | PASS/FAIL | {specific evidence} |
-
-   ### Judgment
-   - Build: PASS/FAIL (based on BUILD_EXIT_CODE)
-   - Tests: PASS/FAIL (based on TEST_EXIT_CODE)
-   ```
-
-   **Judgment rules (mandatory):**
-   - `BUILD_EXIT_CODE != 0` → Build: FAIL, entire verification: FAIL, skip tests
-   - `TEST_EXIT_CODE != 0` → Tests: FAIL (regardless of your interpretation of output)
-   - Even if exit code is 0, flag a WARNING if output contains `FAIL`, `Error`, or `failed`
-</instructions>
+    **중요:** EXIT_CODE != 0이면 반드시 FAIL 판정. 출력 내용과 무관하게 exit code 우선.
+- summary: "tester 검증 작업 지시"
+```
 
 ### Teammate 2: code-reviewer
 
-<task>
-Analyze code quality with static analysis tools, then review patterns and potential issues in all files listed in the implementation plan.
-</task>
+```
+Skill tool:
+- skill: "claude-team:spawn-teammate"
+- args: "code-reviewer --team verify-{todo-id} --agent-type claude-team:reviewer"
+  (GPT_MODE일 때: "code-reviewer --team verify-{todo-id}")
 
-<instructions>
-1. Read all files listed in the spec's implementation plan.
+→ 스폰 완료 후:
+SendMessage tool:
+- type: "message"
+- recipient: "code-reviewer"
+- content: |
+    **검증 대상:** {todo-file-path}
 
-2. **Run static analysis tools** (capture exit codes):
-
-   a) **Type check** (if `tsconfig.json` exists):
-   ```
-   Bash: npx tsc --noEmit 2>&1; echo "TYPECHECK_EXIT_CODE=$?"
-   ```
-
-   b) **Lint** (if `lint` script exists in package.json):
-   ```
-   Bash: $PM run lint 2>&1; echo "LINT_EXIT_CODE=$?"
-   ```
-   (Use the same PM detection as tester: check lock files)
-
-3. Analyze code quality on these criteria:
-
-   <scoring_criteria>
-   - **Readability** (0-20): Clear naming, proper formatting, comments where needed
-   - **Maintainability** (0-20): SOLID principles, DRY, low coupling
-   - **Error Handling** (0-20): Proper try/catch, edge cases handled, validation
-   - **Security** (0-20): No vulnerabilities, input sanitization, auth checks
-   - **Performance** (0-20): No obvious bottlenecks, efficient algorithms, proper caching
-   </scoring_criteria>
-
-4. Check for code smells:
-   - Duplicated code
-   - Long functions (>50 lines)
-   - Deep nesting (>3 levels)
-   - Magic numbers/strings
-   - Missing type annotations (if typed language)
-
-5. **Report to leader in this exact structure:**
-
-   ```
-   ## Code Review Report
-
-   ### Static Analysis Results
-   | Tool | Exit Code | Errors | Warnings |
-   |------|-----------|--------|----------|
-   | Type Check (tsc) | {0/N/N/A} | {count} | {count} |
-   | Lint | {0/N/N/A} | {count} | {count} |
-
-   ### Static Analysis Output (if errors found)
-   ```
-   {raw error output}
-   ```
-
-   ### Code Quality Score
-   | Criteria | Score | Notes |
-   |----------|-------|-------|
-   | Readability | /20 | {notes} |
-   | Maintainability | /20 | {notes} |
-   | Error Handling | /20 | {notes} |
-   | Security | /20 | {notes} |
-   | Performance | /20 | {notes} |
-   | **Total** | **/100** | |
-
-   ### Code Smells
-   {list of findings}
-   ```
-</instructions>
+    다음을 수행해주세요:
+    1. spec의 implementation plan에 나열된 모든 파일을 읽으세요.
+    2. 정적 분석 실행:
+       - Type check (tsconfig.json 있으면): `npx tsc --noEmit 2>&1; echo "TYPECHECK_EXIT_CODE=$?"`
+       - Lint (lint 스크립트 있으면): `$PM run lint 2>&1; echo "LINT_EXIT_CODE=$?"`
+    3. 코드 품질 평가 (각 0-20점):
+       - Readability, Maintainability, Error Handling, Security, Performance
+    4. 코드 스멜 확인:
+       - 중복 코드, 긴 함수(>50줄), 깊은 중첩(>3단계), 매직 넘버/스트링
+    5. 리더에게 다음 형식으로 보고해주세요:
+       ## Code Review Report
+       ### Static Analysis Results
+       | Tool | Exit Code | Errors | Warnings |
+       |------|-----------|--------|----------|
+       | Type Check (tsc) | {값} | {수} | {수} |
+       | Lint | {값} | {수} | {수} |
+       ### Static Analysis Output (if errors found)
+       ```
+       {에러 출력}
+       ```
+       ### Code Quality Score
+       | Criteria | Score | Notes |
+       |----------|-------|-------|
+       | Readability | /20 | |
+       | Maintainability | /20 | |
+       | Error Handling | /20 | |
+       | Security | /20 | |
+       | Performance | /20 | |
+       | **Total** | **/100** | |
+       ### Code Smells
+       {목록}
+- summary: "code-reviewer 코드 리뷰 지시"
+```
 
 ### Teammate 3: integration-checker
 
-<task>
-Check git status, verify no regressions, and test for side effects.
-</task>
+```
+Skill tool:
+- skill: "claude-team:spawn-teammate"
+- args: "integration-checker --team verify-{todo-id} --agent-type claude-team:architect"
+  (GPT_MODE일 때: "integration-checker --team verify-{todo-id}")
+
+→ 스폰 완료 후:
+SendMessage tool:
+- type: "message"
+- recipient: "integration-checker"
+- content: |
+    **검증 대상:** {todo-file-path}
+
+    다음을 수행해주세요:
+    1. git status와 git diff --stat으로 변경 사항을 확인하세요.
+    2. spec의 implementation plan과 실제 변경 파일을 대조하세요 (CREATE/MODIFY 파일 존재 확인).
+    3. spec에 없는 의도하지 않은 변경이 있는지 확인하세요.
+    4. <side_effects> 섹션의 잠재적 부작용을 점검하세요.
+    5. 기존 테스트가 깨지지 않았는지 확인하세요.
+    6. 리더에게 결과를 보고해주세요.
+- summary: "integration-checker 통합 검증 지시"
+```
 
 <instructions>
-1. Run git status and git diff to see all changes:
-   ```
-   Bash: git status
-   Bash: git diff --stat
-   ```
-2. Verify files match the spec (all CREATE/MODIFY files exist and are changed).
-3. Check for unintended changes to files not in the spec.
-4. Look for potential side effects from `<side_effects>` section.
-5. Verify no existing tests are broken.
-6. Report findings back to the leader.
+Wait for all 3 teammates to report their findings. Then proceed to Phase 4.
+
+**팀메이트 결과 대기:**
+- tester, code-reviewer, integration-checker의 보고를 모두 수신할 때까지 대기
+- 각 보고에서 exit code, 점수, 이슈를 추출하여 Phase 4에서 사용
 </instructions>
 
 ---

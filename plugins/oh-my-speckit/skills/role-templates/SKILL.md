@@ -141,6 +141,43 @@ developer를 frontend-dev + backend-dev로 분리할지 판단하는 기준:
 - FE + BE 디렉토리 모두 존재 → fullstack → frontend-dev + backend-dev
 - 그 외 → developer로 통합
 
+## 프레임워크 기반 에이전트 오버라이드
+
+프로젝트의 프레임워크를 감지하여 기본 에이전트를 전문 에이전트로 오버라이드합니다.
+
+### 프레임워크 감지 로직
+
+| 프레임워크 | 감지 파일 | 감지 키워드 |
+|-----------|----------|------------|
+| Spring Boot | `pom.xml`, `build.gradle` | `spring-boot` |
+| FastAPI | `requirements.txt`, `pyproject.toml` | `fastapi` |
+| NestJS | `package.json` | `@nestjs/core` |
+| Next.js | `next.config.{js,ts,mjs}` | 파일 존재 |
+| Nuxt | `nuxt.config.{js,ts}` | 파일 존재 |
+| React | `package.json` | `"react"` (Next.js 미감지시) |
+| Vue | `package.json` | `"vue"` (Nuxt 미감지시) |
+
+### 오버라이드 매핑
+
+| 역할 | 기본 에이전트 | 프레임워크 → 전문 에이전트 |
+|------|-------------|--------------------------|
+| developer | implementer | spring→spring-expert, fastapi→fastapi-expert, nestjs→nestjs-expert |
+| frontend-dev | frontend | nextjs→nextjs-expert, nuxt→nuxt-expert, react→react-expert, vue→vue-expert |
+| backend-dev | backend | spring→spring-expert, nestjs→nestjs-expert, fastapi→fastapi-expert |
+
+### implement 커맨드 적용 예시
+
+```
+# Spring Boot 프로젝트 감지 시
+Skill: spawn-teammate
+args: "developer --team implement-{id} --agent-type claude-team:spring-expert"
+
+# Next.js + NestJS fullstack 프로젝트 감지 시
+Skill: spawn-teammate
+args: "frontend-dev --team implement-{id} --agent-type claude-team:nextjs-expert"
+args: "backend-dev --team implement-{id} --agent-type claude-team:nestjs-expert"
+```
+
 ---
 
 ## LLM 모드 옵션
@@ -196,3 +233,23 @@ developer를 frontend-dev + backend-dev로 분리할지 판단하는 기준:
 3. **자율적 결정**: 세부 구현/분석 방법은 스스로 판단
 4. **리더 에스컬레이션**: 사용자 결정이 필요한 사항만 리더에게 보고
 5. **shutdown_request**: 수신 시 진행 중 작업 마무리 후 즉시 승인
+
+## 서브에이전트 활용 가이드
+
+팀메이트(implementer, frontend, backend, tester 등)는 Task 도구를 통해 전문가 서브에이전트를 활용할 수 있습니다.
+
+### 활용 원칙
+
+1. **전문 분석이 필요할 때만 스폰** — 단순 작업에는 사용 금지
+2. **구체적인 질문 전달** — 전체 태스크가 아닌 특정 분석 요청
+3. **결과는 참고용** — 서브에이전트 결과를 기반으로 팀메이트가 최종 구현
+
+### 역할별 추천 서브에이전트
+
+| 팀메이트 역할 | 추천 서브에이전트 |
+|-------------|-----------------|
+| developer (implementer) | db-architect, api-designer, security-architect, domain-modeler |
+| frontend-dev (frontend, react-expert, vue-expert) | css-architect, a11y-auditor, state-designer, fe-performance, fe-tester |
+| frontend-dev (nextjs-expert, nuxt-expert) | css-architect, a11y-auditor, state-designer, fe-performance, api-designer |
+| backend-dev (backend, spring-expert, nestjs-expert, fastapi-expert) | db-architect, api-designer, security-architect, integration-tester |
+| qa (tester) | test-strategist, integration-tester, fe-tester, side-effect-analyzer |

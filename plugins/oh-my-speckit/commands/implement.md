@@ -135,6 +135,38 @@ AskUserQuestion:
   - "처음부터 다시"
 ```
 
+### Step 2.7: 프레임워크 감지
+
+프로젝트에서 사용 중인 프레임워크를 감지하여 전문 에이전트를 선택합니다.
+
+**백엔드 프레임워크 감지:**
+
+| 프레임워크 | 감지 파일 | 감지 키워드 | 결과 |
+|-----------|----------|------------|------|
+| Spring Boot | `pom.xml`, `build.gradle` | `spring-boot` | BACKEND_FRAMEWORK=spring |
+| FastAPI | `requirements.txt`, `pyproject.toml` | `fastapi` | BACKEND_FRAMEWORK=fastapi |
+| NestJS | `package.json` | `@nestjs/core` | BACKEND_FRAMEWORK=nestjs |
+
+**프론트엔드 프레임워크 감지:**
+
+| 프레임워크 | 감지 파일 | 감지 키워드 | 결과 |
+|-----------|----------|------------|------|
+| Next.js | `next.config.{js,ts,mjs}` | 파일 존재 | FRONTEND_FRAMEWORK=nextjs |
+| Nuxt | `nuxt.config.{js,ts}` | 파일 존재 | FRONTEND_FRAMEWORK=nuxt |
+| React | `package.json` | `"react"` (Next.js 미감지시) | FRONTEND_FRAMEWORK=react |
+| Vue | `package.json` | `"vue"` (Nuxt 미감지시) | FRONTEND_FRAMEWORK=vue |
+
+**감지 우선순위:** 메타프레임워크 우선 (Next.js > React, Nuxt > Vue)
+
+```
+Glob: pom.xml, build.gradle, build.gradle.kts
+Glob: next.config.*, nuxt.config.*
+Grep: package.json → "@nestjs/core", "react", "vue"
+Grep: requirements.txt, pyproject.toml → "fastapi"
+```
+
+감지 결과는 Step 3의 역할-에이전트 매핑에 사용됩니다.
+
 ### Step 3: 기존 태스크 정리
 
 ```
@@ -213,14 +245,17 @@ Medium/Large에서 developer x2가 필요한 경우, fullstack 프로젝트 여�
 
 **역할-에이전트 매핑:**
 
-| 역할 | 에이전트 타입 |
-|------|-------------|
-| developer | claude-team:implementer |
-| frontend-dev | claude-team:frontend |
-| backend-dev | claude-team:backend |
-| developer-2 | claude-team:implementer (2nd instance) |
-| qa | claude-team:tester |
-| architect | claude-team:architect |
+| 역할 | 기본 에이전트 | 프레임워크 오버라이드 |
+|------|-------------|---------------------|
+| developer | claude-team:implementer | BACKEND: spring→spring-expert, fastapi→fastapi-expert, nestjs→nestjs-expert |
+| frontend-dev | claude-team:frontend | FRONTEND: nextjs→nextjs-expert, nuxt→nuxt-expert, react→react-expert, vue→vue-expert |
+| backend-dev | claude-team:backend | BACKEND: spring→spring-expert, nestjs→nestjs-expert, fastapi→fastapi-expert |
+| developer-2 | claude-team:implementer | (developer와 동일한 오버라이드) |
+| qa | claude-team:tester | (오버라이드 없음) |
+| architect | claude-team:architect | (오버라이드 없음) |
+
+프레임워크 감지 결과(Step 2.7)에 따라 에이전트 타입을 동적으로 선택합니다.
+예: BACKEND_FRAMEWORK=spring → developer의 에이전트 타입이 `claude-team:spring-expert`로 변경
 
 ---
 
@@ -229,7 +264,8 @@ Medium/Large에서 developer x2가 필요한 경우, fullstack 프로젝트 여�
 ```
 Skill tool:
 - skill: "claude-team:spawn-teammate"
-- args: "developer --team implement-{spec-id} --agent-type claude-team:implementer"
+- args: "developer --team implement-{spec-id} --agent-type claude-team:{DETECTED_AGENT}"
+  (DETECTED_AGENT: BACKEND_FRAMEWORK 감지시 해당 전문가, 미감지시 implementer)
   (GPT_MODE일 때: "developer --team implement-{spec-id}")
 
 → 스폰 완료 후:
@@ -252,7 +288,8 @@ SendMessage tool:
 ```
 Skill tool:
 - skill: "claude-team:spawn-teammate"
-- args: "frontend-dev --team implement-{spec-id} --agent-type claude-team:frontend"
+- args: "frontend-dev --team implement-{spec-id} --agent-type claude-team:{DETECTED_AGENT}"
+  (DETECTED_AGENT: FRONTEND_FRAMEWORK 감지시 해당 전문가, 미감지시 frontend)
   (GPT_MODE일 때: "frontend-dev --team implement-{spec-id}")
 
 → 스폰 완료 후:
@@ -277,7 +314,8 @@ SendMessage tool:
 ```
 Skill tool:
 - skill: "claude-team:spawn-teammate"
-- args: "backend-dev --team implement-{spec-id} --agent-type claude-team:backend"
+- args: "backend-dev --team implement-{spec-id} --agent-type claude-team:{DETECTED_AGENT}"
+  (DETECTED_AGENT: BACKEND_FRAMEWORK 감지시 해당 전문가, 미감지시 backend)
   (GPT_MODE일 때: "backend-dev --team implement-{spec-id}")
 
 → 스폰 완료 후:
@@ -302,7 +340,8 @@ SendMessage tool:
 ```
 Skill tool:
 - skill: "claude-team:spawn-teammate"
-- args: "developer-2 --team implement-{spec-id} --agent-type claude-team:implementer"
+- args: "developer-2 --team implement-{spec-id} --agent-type claude-team:{DETECTED_AGENT}"
+  (DETECTED_AGENT: developer와 동일한 오버라이드 적용)
   (GPT_MODE일 때: "developer-2 --team implement-{spec-id}")
 
 → 스폰 완료 후:
