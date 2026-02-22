@@ -1,6 +1,6 @@
 ---
 description: plan.md 기반 코드 구현 (Agent Teams, 자동/대화형)
-argument-hint: [spec-id] [--interactive] [--gpt]
+argument-hint: [spec-id] [--interactive] [--gpt] [--window]
 allowed-tools: Read, Write, Edit, Grep, Glob, Bash, AskUserQuestion, Task, Skill, TaskCreate, TaskUpdate, TaskList, TeamCreate, TeamDelete, SendMessage
 ---
 
@@ -88,6 +88,10 @@ code-generation 스킬의 지식(기존 코드 우선 원칙, 패턴 준수)을 
 arguments에서 `--gpt` 옵션 확인:
 - `--gpt` 포함 → GPT_MODE = true (spawn-teammate에 `--agent-type` 없이 호출)
 - 기본값 → GPT_MODE = false (spawn-teammate에 `--agent-type` 지정)
+
+arguments에서 `--window` 옵션 확인:
+- `--window` 포함 → WINDOW_MODE = true (spawn-teammate에 --window 전달)
+- 기본값 → WINDOW_MODE = false
 
 **spec-id 미지정 시:**
 ```
@@ -267,6 +271,7 @@ Skill tool:
 - args: "developer --team implement-{spec-id} --agent-type claude-team:{DETECTED_AGENT}"
   (DETECTED_AGENT: BACKEND_FRAMEWORK 감지시 해당 전문가, 미감지시 implementer)
   (GPT_MODE일 때: "developer --team implement-{spec-id}")
+  (WINDOW_MODE일 때 끝에 --window 추가)
 
 → 스폰 완료 후:
 SendMessage tool:
@@ -291,6 +296,7 @@ Skill tool:
 - args: "frontend-dev --team implement-{spec-id} --agent-type claude-team:{DETECTED_AGENT}"
   (DETECTED_AGENT: FRONTEND_FRAMEWORK 감지시 해당 전문가, 미감지시 frontend)
   (GPT_MODE일 때: "frontend-dev --team implement-{spec-id}")
+  (WINDOW_MODE일 때 끝에 --window 추가)
 
 → 스폰 완료 후:
 SendMessage tool:
@@ -317,6 +323,7 @@ Skill tool:
 - args: "backend-dev --team implement-{spec-id} --agent-type claude-team:{DETECTED_AGENT}"
   (DETECTED_AGENT: BACKEND_FRAMEWORK 감지시 해당 전문가, 미감지시 backend)
   (GPT_MODE일 때: "backend-dev --team implement-{spec-id}")
+  (WINDOW_MODE일 때 끝에 --window 추가)
 
 → 스폰 완료 후:
 SendMessage tool:
@@ -343,6 +350,7 @@ Skill tool:
 - args: "developer-2 --team implement-{spec-id} --agent-type claude-team:{DETECTED_AGENT}"
   (DETECTED_AGENT: developer와 동일한 오버라이드 적용)
   (GPT_MODE일 때: "developer-2 --team implement-{spec-id}")
+  (WINDOW_MODE일 때 끝에 --window 추가)
 
 → 스폰 완료 후:
 SendMessage tool:
@@ -366,6 +374,7 @@ Skill tool:
 - skill: "claude-team:spawn-teammate"
 - args: "qa --team implement-{spec-id} --agent-type claude-team:tester"
   (GPT_MODE일 때: "qa --team implement-{spec-id}")
+  (WINDOW_MODE일 때 끝에 --window 추가)
 
 → 스폰 완료 후:
 SendMessage tool:
@@ -388,6 +397,7 @@ Skill tool:
 - skill: "claude-team:spawn-teammate"
 - args: "architect --team implement-{spec-id} --agent-type claude-team:architect"
   (GPT_MODE일 때: "architect --team implement-{spec-id}")
+  (WINDOW_MODE일 때 끝에 --window 추가)
 
 → 스폰 완료 후:
 SendMessage tool:

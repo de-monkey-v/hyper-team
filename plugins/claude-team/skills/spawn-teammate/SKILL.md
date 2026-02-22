@@ -16,7 +16,7 @@ version: 2.0.0
 ## 인자 형식
 
 ```
-{member-name} --team {team-name} [--agent-type {plugin}:{agent}] [--model {model}] [--color {color}]
+{member-name} --team {team-name} [--agent-type {plugin}:{agent}] [--model {model}] [--color {color}] [--window]
 ```
 
 - `member-name`: 팀메이트 이름 (예: `pm`, `developer`, `qa`) — **필수**
@@ -24,6 +24,7 @@ version: 2.0.0
 - `--agent-type`: 에이전트 타입 (예: `claude-team:implementer`) — 지정 시 Claude 모드
 - `--model`: 모델 오버라이드 (기본값: 에이전트별 기본 모델)
 - `--color`: 색상 오버라이드 (기본값: 에이전트별 기본 색상)
+- `--window`: 별도 윈도우 모드. 리더 윈도우가 아닌 별도 tmux 윈도우에 배치 (윈도우당 최대 2명, 수평 분할)
 
 **모드 감지**: `--agent-type` 있으면 **Claude 모드**, 없으면 **GPT 모드**
 
@@ -37,6 +38,9 @@ version: 2.0.0
 
 "developer --team impl-003 --agent-type claude-team:implementer --model sonnet --color #0066CC"
 → Claude 모드 + 오버라이드: NAME="developer", TEAM="impl-003", AGENT_TYPE="claude-team:implementer", MODEL="sonnet", COLOR="#0066CC"
+
+"developer --team impl-003 --agent-type claude-team:implementer --window"
+→ Claude 모드 + 윈도우 모드: NAME="developer", TEAM="impl-003", AGENT_TYPE="claude-team:implementer", WINDOW_MODE=true
 ```
 
 ## 에이전트별 기본값 테이블
@@ -187,9 +191,32 @@ fi
 PANE_HEIGHT=${SPAWN_PANE_HEIGHT:-15}
 ```
 
+**4-2.5. 윈도우 모드 변수 계산 (`--window` 지정 시):**
+
+`--window` 옵션이 지정된 경우에만 실행하는 사전 계산 블록입니다:
+
+```bash
+MEMBER_COUNT=$(jq '.members | length' "$CONFIG" 2>/dev/null || echo 0)
+WINDOW_INDEX=$(( (MEMBER_COUNT / 2) + 1 ))
+POSITION_IN_WINDOW=$(( MEMBER_COUNT % 2 ))  # 0=새 윈도우, 1=기존 분할
+WINDOW_NAME="${TEAM}-${WINDOW_INDEX}"
+```
+
+| MEMBER_COUNT | WINDOW_INDEX | POSITION | 동작 |
+|-------------|-------------|----------|------|
+| 0 | 1 | 0 | 새 윈도우 `{TEAM}-1` 생성 |
+| 1 | 1 | 1 | `{TEAM}-1`에서 수평 분할 |
+| 2 | 2 | 0 | 새 윈도우 `{TEAM}-2` 생성 |
+| 3 | 2 | 1 | `{TEAM}-2`에서 수평 분할 |
+| 4 | 3 | 0 | 새 윈도우 `{TEAM}-3` 생성 |
+
 **4-3. 모드별 Pane 스폰:**
 
-#### GPT 모드 (`--agent-type` 없을 때)
+#### 기본 모드 (`--window` 미지정)
+
+리더 윈도우에 pane으로 분할합니다. 기존 동작과 동일합니다.
+
+##### GPT 모드 (`--agent-type` 없을 때)
 
 ```bash
 # Discover plugin directory for skill loading
@@ -215,7 +242,7 @@ tmux set-option -p -t "$PANE_ID" @agent_label "${NAME}"
 - `--model opus`: cli-proxy-api의 환경변수에 의해 `gpt-5.3-codex(xhigh)`로 매핑됨
 - `gpt-claude-code`: cli-proxy-api 환경변수를 설정하여 claude CLI를 GPT 모델로 직접 실행
 
-#### Claude 모드 (`--agent-type` 있을 때)
+##### Claude 모드 (`--agent-type` 있을 때)
 
 에이전트별 기본값 룩업 (MODEL/COLOR 미지정 시):
 ```bash
@@ -303,6 +330,44 @@ tmux set-option -p -t "$PANE_ID" @agent_label "${NAME}"
 - `--parent-session-id`: 리더와의 메시지 라우팅 연결
 - `--dangerously-skip-permissions`: 자율적 실행 허용
 
+#### 윈도우 모드 (`--window` 지정)
+
+별도 tmux 윈도우에 배치합니다. 윈도우당 최대 2명, 수평 분할(side-by-side). 리더 윈도우는 그대로 유지됩니다.
+
+GPT/Claude 모드의 **명령어(command)**는 기본 모드와 동일하며, **tmux 배치 방식**만 달라집니다.
+
+**윈도우 모드 - 새 윈도우 (POSITION_IN_WINDOW == 0):**
+
+```bash
+# 방어적 체크: 윈도우가 이미 존재하면 분할로 fallback
+if tmux list-windows -t "${TMUX_SESSION}" -F '#{window_name}' | grep -q "^${WINDOW_NAME}$"; then
+  EXISTING_PANES=$(tmux list-panes -t "${TMUX_SESSION}:${WINDOW_NAME}" | wc -l)
+  if [ "$EXISTING_PANES" -ge 2 ]; then
+    WINDOW_INDEX=$((WINDOW_INDEX + 1))
+    WINDOW_NAME="${TEAM}-${WINDOW_INDEX}"
+  else
+    POSITION_IN_WINDOW=1  # 분할로 전환
+  fi
+fi
+
+# 새 윈도우 생성 (POSITION_IN_WINDOW == 0일 때)
+PANE_ID=$(tmux new-window -t "${TMUX_SESSION}" -n "${WINDOW_NAME}" -c "$PWD" -dP -F '#{pane_id}' "command")
+```
+
+**윈도우 모드 - 기존 윈도우 분할 (POSITION_IN_WINDOW == 1):**
+
+```bash
+TARGET_PANE=$(tmux list-panes -t "${TMUX_SESSION}:${WINDOW_NAME}" -F '#{pane_id}' | head -1)
+PANE_ID=$(tmux split-window -h -t "$TARGET_PANE" -c "$PWD" -dP -F '#{pane_id}' "command")
+```
+
+핵심 차이점:
+- `tmux new-window -n "${WINDOW_NAME}"`: 팀 이름 기반 윈도우 이름
+- `tmux split-window -h`: 수평 분할 (side-by-side)
+- `-d` 플래그: 리더 윈도우에 포커스 유지
+
+위의 `"command"` 부분에는 기본 모드의 GPT/Claude 명령어가 그대로 들어갑니다.
+
 **4-4. Pane Border 활성화 및 레이아웃 재조정:**
 
 ```bash
@@ -322,6 +387,15 @@ if [ "$MEMBER_COUNT" -ge 2 ]; then
 fi
 ```
 
+**윈도우 모드 Border 설정:**
+
+윈도우 모드에서는 새 윈도우마다 border 설정을 적용합니다. `main-vertical` 레이아웃은 불필요합니다 (윈도우당 최대 2 pane이므로 기본 분할로 충분).
+
+```bash
+tmux set-option -w -t "${TMUX_SESSION}:${WINDOW_NAME}" pane-border-status bottom
+tmux set-option -w -t "${TMUX_SESSION}:${WINDOW_NAME}" pane-border-format "#{?@agent_label, #{@agent_label} | #{pane_title}, #{pane_title}}"
+```
+
 #### Pane 크기 전략
 
 | 시나리오 | 전략 |
@@ -329,6 +403,8 @@ fi
 | 팀메이트 1개 | `-l 15`로 고정 크기 분할 |
 | 팀메이트 2개+ | 스폰 후 `main-vertical`로 재배치 (리더=왼쪽 전체높이, 팀메이트=우측 row) |
 | 터미널 너비 부족 (<120열) | 최소 너비 40열 보장, 부족 시 경고 |
+| 윈도우 모드: 첫 번째 멤버 | `new-window`로 전체 윈도우 사용 |
+| 윈도우 모드: 두 번째 멤버 | `split-window -h`로 50:50 수평 분할 |
 
 ### Step 5: Config 등록 (원자적 쓰기)
 
@@ -369,6 +445,22 @@ LOCKFILE="$HOME/.claude/teams/${TEAM}/.config.lock"
       "joinedAt": (now * 1000 | floor), "cwd": env.PWD, "subscriptions": []
     }]' "$CONFIG" > "${CONFIG}.tmp" && mv "${CONFIG}.tmp" "$CONFIG"
 ) 200>"$LOCKFILE"
+```
+
+#### 윈도우 모드 추가 필드
+
+윈도우 모드(`--window`)일 때만 member 레코드에 `tmuxWindowName` 필드를 추가합니다. 기본 모드에서는 생략 (하위 호환):
+
+```bash
+# 윈도우 모드일 때: tmuxWindowName 필드 추가
+if [ "$WINDOW_MODE" = "true" ]; then
+  (
+    flock -w 10 200 || { echo "ERROR: Config lock 획득 실패"; exit 1; }
+    jq --arg name "$NAME" --arg windowName "$WINDOW_NAME" \
+      '(.members[] | select(.name == $name)) += {"tmuxWindowName": $windowName}' \
+      "$CONFIG" > "${CONFIG}.tmp" && mv "${CONFIG}.tmp" "$CONFIG"
+  ) 200>"$LOCKFILE"
+fi
 ```
 
 **쓰기 후 검증 (공통):**
@@ -457,6 +549,11 @@ Claude 팀메이트 스폰 완료: ${NAME} (Team: ${TEAM})
 - Pane: ${PANE_ID}
 ```
 
+윈도우 모드일 때 추가 정보:
+```markdown
+- Window: ${WINDOW_NAME}
+```
+
 ## 스폰 완료 후 작업
 
 스폰 완료 후 호출한 커맨드가 **SendMessage로 초기 작업을 지시**합니다:
@@ -509,6 +606,29 @@ SendMessage tool:
 | 에이전트 타입 오류 (Claude) | 에이전트 파일 존재 여부 확인 | `plugins/claude-team/agents/` 확인 |
 | tmux 공간 부족 | `tmux list-panes` 확인 | 불필요한 pane 정리 또는 터미널 확대 |
 | 환경변수 미로드 | `source ~/.zshrc` 후 재시도 | `.zshrc` 내 함수/변수 확인 |
+
+### 윈도우 모드 빈 윈도우 정리
+
+`--window` 모드로 스폰한 팀의 빈 윈도우를 확인하고 정리합니다:
+
+```bash
+# 빈 윈도우 확인
+TMUX_SESSION=$(tmux display-message -p '#S')
+tmux list-windows -t "${TMUX_SESSION}" -F '#{window_name} #{window_panes}' | grep "^${TEAM}-"
+
+# 특정 팀의 빈 윈도우만 정리
+tmux list-windows -t "${TMUX_SESSION}" -F '#{window_name} #{window_panes}' | while read name panes; do
+  if echo "$name" | grep -q "^${TEAM}-" && [ "$panes" -le 1 ]; then
+    PANE_CMD=$(tmux list-panes -t "${TMUX_SESSION}:${name}" -F '#{pane_current_command}' 2>/dev/null | head -1)
+    if [ -z "$PANE_CMD" ] || echo "$PANE_CMD" | grep -qE '^(zsh|bash)$'; then
+      tmux kill-window -t "${TMUX_SESSION}:${name}" 2>/dev/null
+      echo "Cleaned: ${name}"
+    fi
+  fi
+done
+```
+
+> **참고**: tmux는 마지막 pane이 종료되면 윈도우를 자동 삭제합니다. 이 정리는 레이스 컨디션으로 인해 기본 shell만 남은 윈도우를 처리하는 방어적 안전장치입니다.
 
 ### Config 죽은 멤버 수동 정리
 
@@ -572,6 +692,26 @@ SendMessage tool:
 Skill tool:
 - skill: "claude-team:spawn-teammate"
 - args: "{role-name} --team {team-name} --agent-type claude-team:{agent}"
+
+→ 스폰 완료 후:
+SendMessage tool:
+- type: "message"
+- recipient: "{role-name}"
+- content: |
+    [역할 템플릿 기반 프롬프트]
+- summary: "{role-name} 초기 작업 지시"
+```
+
+### 윈도우 모드 (`--window`)
+
+```
+Skill tool:
+- skill: "claude-team:spawn-teammate"
+- args: "{role-name} --team {team-name} --agent-type claude-team:{agent} --window"
+
+→ 별도 tmux 윈도우에 배치 (윈도우당 최대 2명, 수평 분할)
+→ 리더 윈도우 포커스 유지
+→ 5개 팀메이트 → 3개 윈도우 ({TEAM}-1, {TEAM}-2, {TEAM}-3)
 
 → 스폰 완료 후:
 SendMessage tool:

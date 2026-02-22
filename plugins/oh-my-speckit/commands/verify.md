@@ -1,6 +1,6 @@
 ---
 description: 구현 검증 및 대화형 수정 (Agent Teams, 병렬 검증)
-argument-hint: [spec-id] [--quick|--full] [--gpt]
+argument-hint: [spec-id] [--quick|--full] [--gpt] [--window]
 allowed-tools: Read, Write, Edit, Grep, Glob, Bash, AskUserQuestion, Task, Skill, TaskCreate, TaskUpdate, TaskList, TeamCreate, TeamDelete, SendMessage
 ---
 
@@ -205,6 +205,10 @@ arguments에서 `--gpt` 옵션 확인:
 - `--gpt` 포함 -> GPT_MODE = true (spawn-teammate에 `--agent-type` 없이 호출)
 - 기본값 -> GPT_MODE = false (spawn-teammate에 `--agent-type` 지정)
 
+arguments에서 `--window` 옵션 확인:
+- `--window` 포함 → WINDOW_MODE = true (spawn-teammate에 --window 전달)
+- 기본값 → WINDOW_MODE = false
+
 ### Step 3: 팀메이트 스폰 + 검증 지시 (병렬)
 
 모든 팀메이트는 spawn-teammate Skill로 스폰합니다.
@@ -227,6 +231,7 @@ Skill tool:
 - skill: "claude-team:spawn-teammate"
 - args: "qa --team verify-{spec-id} --agent-type claude-team:tester"
   (GPT_MODE일 때: "qa --team verify-{spec-id}")
+  (WINDOW_MODE일 때 끝에 --window 추가)
 
 -> 스폰 완료 후:
 SendMessage tool:
@@ -254,6 +259,7 @@ Skill tool:
 - skill: "claude-team:spawn-teammate"
 - args: "critic --team verify-{spec-id} --agent-type claude-team:reviewer"
   (GPT_MODE일 때: "critic --team verify-{spec-id}")
+  (WINDOW_MODE일 때 끝에 --window 추가)
 
 -> 스폰 완료 후:
 SendMessage tool:
@@ -279,6 +285,7 @@ Skill tool:
 - skill: "claude-team:spawn-teammate"
 - args: "architect --team verify-{spec-id} --agent-type claude-team:architect"
   (GPT_MODE일 때: "architect --team verify-{spec-id}")
+  (WINDOW_MODE일 때 끝에 --window 추가)
 
 -> 스폰 완료 후:
 SendMessage tool:
@@ -356,6 +363,7 @@ Skill tool:
 - skill: "claude-team:spawn-teammate"
 - args: "developer --team verify-{spec-id} --agent-type claude-team:implementer"
   (GPT_MODE일 때: "developer --team verify-{spec-id}")
+  (WINDOW_MODE일 때 끝에 --window 추가)
 
 -> 스폰 완료 후:
 SendMessage tool:

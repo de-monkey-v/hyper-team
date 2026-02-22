@@ -146,6 +146,23 @@ If count > 0:
 - If "No": Exit without deleting team
 - If "Yes": Continue to deletion
 
+### Cleanup Window Mode Windows
+
+윈도우 모드(`--window`)로 스폰된 팀의 빈 윈도우를 정리합니다. tmux는 마지막 pane이 종료되면 윈도우를 자동 삭제하므로 대부분 불필요하지만, 방어적 안전장치입니다:
+
+```bash
+TMUX_SESSION=$(tmux display-message -p '#S')
+tmux list-windows -t "${TMUX_SESSION}" -F '#{window_name} #{window_panes}' | while read name panes; do
+  if echo "$name" | grep -q "^${TEAM_NAME}-" && [ "$panes" -le 1 ]; then
+    # pane 수가 0이면 빈 윈도우, 1이면 기본 shell만 남은 윈도우
+    PANE_CMD=$(tmux list-panes -t "${TMUX_SESSION}:${name}" -F '#{pane_current_command}' 2>/dev/null | head -1)
+    if [ -z "$PANE_CMD" ] || echo "$PANE_CMD" | grep -qE '^(zsh|bash)$'; then
+      tmux kill-window -t "${TMUX_SESSION}:${name}" 2>/dev/null
+    fi
+  fi
+done
+```
+
 ### Delete Team
 
 Execute TeamDelete tool:
