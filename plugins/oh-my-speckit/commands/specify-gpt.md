@@ -1,15 +1,15 @@
 ---
-description: 기능 요청을 spec.md + plan.md로 통합 생성 (Agent Teams, Claude 네이티브)
-argument-hint: [기능 설명]
+description: 기능 요청을 spec.md + plan.md로 통합 생성 (Agent Teams, GPT 모드)
+argument-hint: [기능 설명] [--window] [--no-window]
 allowed-tools: Read, Write, Edit, Grep, Glob, Bash, AskUserQuestion, Task, Skill, TaskCreate, TaskUpdate, TaskList, TeamCreate, TeamDelete, SendMessage
 ---
 
-# Specify Command
+# Specify GPT Command
 
 기능 요청을 분석하여 spec.md와 plan.md를 한 번에 생성합니다.
-Claude Code 네이티브 Task tool로 팀메이트를 스폰하고, Agent Teams 프로토콜로 협업합니다.
+GPT 모드(cli-proxy-api)로 팀메이트를 스폰하고, Agent Teams 프로토콜로 협업합니다.
 
-> GPT 모드(cli-proxy-api)가 필요하면: `/oh-my-speckit:specify-gpt [기능 설명]`
+> Claude 네이티브 모드가 필요하면: `/oh-my-speckit:specify [기능 설명]`
 
 **핵심 원칙**:
 - **리더(이 커맨드)는 사용자와 소통하고 팀을 조율** - 코드베이스 직접 분석 금지
@@ -49,9 +49,9 @@ Phase 5: 팀 해산 + 완료 안내
 | 0 | 4 | 태스크 등록 | TaskCreate |
 | 1 | 1 | 팀 생성 | TeamCreate |
 | 1 | 2 | role-templates 참조하여 팀 구성 판단 | Skill |
-| 1 | 3 | 팀메이트 스폰 (pm, architect 등) | Task tool |
+| 1 | 3 | 팀메이트 스폰 (pm, architect 등) | Skill (spawn-teammate) |
 | 4 | 2 | 사용자 승인 후 파일 저장 | Write |
-| 5 | 1 | 팀 해산 | TeamDelete |
+| 5 | 1 | 팀 해산 | SendMessage (shutdown), TeamDelete |
 
 **금지 사항:**
 - 리더가 직접 코드베이스 분석 수행
@@ -59,7 +59,6 @@ Phase 5: 팀 해산 + 완료 안내
 - 섹션별 확인 질문 (한 번에 작성 후 최종 승인만)
 - 전체 문서 출력 (요약만 표시)
 - 사용자 승인 없이 파일 저장
-- spawn-teammate Skill 사용 (GPT 모드는 `/oh-my-speckit:specify-gpt` 사용)
 
 ---
 
@@ -128,6 +127,22 @@ ls -1d ${PROJECT_ROOT}/.specify/specs/${NEXT_ID}-* 2>/dev/null
 - 출력 없음 → 사용 가능
 - 출력 있음 → NEXT_ID를 +1 증가 후 재검증
 
+### Step 2.7: 윈도우 모드 설정
+
+**Config 읽기:**
+```
+Read tool: ${PROJECT_ROOT}/.specify/config.json
+```
+파일이 없거나 읽기 실패 시 `{}` 으로 간주.
+
+**WINDOW_MODE 결정 (우선순위: CLI > config > default):**
+1. arguments에 `--window` 포함 → WINDOW_MODE = true
+2. arguments에 `--no-window` 포함 → WINDOW_MODE = false
+3. 위 둘 다 없으면 → config의 `spawnWindow` 필드가 `true` → WINDOW_MODE = true
+4. 기본값 → WINDOW_MODE = false
+
+WINDOW_MODE일 때: spawn-teammate에 `--window` 전달
+
 ### Step 3: 기존 태스크 정리
 
 ```
@@ -148,6 +163,18 @@ TEAM_NAME="specify-{spec-id}"
 **팀이 존재하면 자동 정리:**
 
 ```bash
+CONFIG="$HOME/.claude/teams/$TEAM_NAME/config.json"
+if [ -f "$CONFIG" ]; then
+  # 활성 멤버 tmux pane 종료
+  jq -r '.members[] | select(.isActive==true and .tmuxPaneId!=null and .tmuxPaneId!="") | .tmuxPaneId' "$CONFIG" 2>/dev/null | while read -r pane_id; do
+    tmux kill-pane -t "$pane_id" 2>/dev/null || true
+  done
+  # window 모드 정리
+  tmux list-windows -a -F "#{window_id} #{window_name}" 2>/dev/null | grep "${TEAM_NAME}-" | while read -r wid _; do
+    tmux kill-window -t "$wid" 2>/dev/null || true
+  done
+fi
+# 디렉토리 정리
 rm -rf "$HOME/.claude/teams/$TEAM_NAME"
 rm -rf "$HOME/.claude/tasks/$TEAM_NAME"
 ```
@@ -216,27 +243,30 @@ Skill tool:
 
 ### Step 3: 팀메이트 스폰 (병렬)
 
-Task tool로 팀메이트를 스폰합니다. prompt에 작업 지시를 직접 포함하므로 별도 SendMessage가 불필요합니다.
+spawn-teammate Skill로 팀메이트를 스폰한 뒤, SendMessage로 고수준 목표를 전달합니다.
 팀메이트는 자율적으로 세부 분석을 수행하고, 필요시 팀메이트 간 직접 소통합니다.
 
-**역할-에이전트 매핑:**
+**역할 매핑:**
 
-| 역할 | subagent_type |
-|------|--------------|
-| pm | claude-team:planner |
-| architect | claude-team:architect |
-| critic | claude-team:reviewer |
+| 역할 | 스폰 방식 |
+|------|----------|
+| pm | spawn-teammate (GPT 모드) |
+| architect | spawn-teammate (GPT 모드) |
+| critic | spawn-teammate (GPT 모드) |
 
 **pm 스폰 (필수):**
 
 ```
-Task tool:
-- subagent_type: "claude-team:planner"
-- team_name: "specify-{spec-id}"
-- name: "pm"
-- description: "pm: 요구사항 분석"
-- run_in_background: true
-- prompt: |
+Skill tool:
+- skill: "claude-team:spawn-teammate"
+- args: "pm --team specify-{spec-id}"
+  (WINDOW_MODE일 때 끝에 --window 추가)
+
+→ 스폰 완료 후:
+SendMessage tool:
+- type: "message"
+- recipient: "pm"
+- content: |
     사용자가 다음 기능을 요청했습니다: {사용자 요청 원문}
 
     프로젝트 루트: {PROJECT_ROOT}
@@ -245,18 +275,22 @@ Task tool:
     이 기능에 대한 요구사항을 분석하고 US/FR/NFR/EC로 구조화해주세요.
     architect 팀메이트가 있으면 기술적 타당성을 협의하세요.
     완료되면 리더에게 결과를 보고해주세요.
+- summary: "pm 작업 지시"
 ```
 
 **architect 스폰 (Medium 이상):**
 
 ```
-Task tool:
-- subagent_type: "claude-team:architect"
-- team_name: "specify-{spec-id}"
-- name: "architect"
-- description: "architect: 코드베이스 분석"
-- run_in_background: true
-- prompt: |
+Skill tool:
+- skill: "claude-team:spawn-teammate"
+- args: "architect --team specify-{spec-id}"
+  (WINDOW_MODE일 때 끝에 --window 추가)
+
+→ 스폰 완료 후:
+SendMessage tool:
+- type: "message"
+- recipient: "architect"
+- content: |
     사용자가 다음 기능을 요청했습니다: {사용자 요청 요약}
 
     프로젝트 루트: {PROJECT_ROOT}
@@ -264,18 +298,22 @@ Task tool:
     코드베이스를 분석하고 아키텍처 관점에서 이 기능의 설계 방향을 제안해주세요.
     pm 팀메이트와 요구사항의 기술적 타당성을 협의하세요.
     완료되면 리더에게 결과를 보고해주세요.
+- summary: "architect 작업 지시"
 ```
 
 **critic 스폰 (Large만):**
 
 ```
-Task tool:
-- subagent_type: "claude-team:reviewer"
-- team_name: "specify-{spec-id}"
-- name: "critic"
-- description: "critic: 비판적 검토"
-- run_in_background: true
-- prompt: |
+Skill tool:
+- skill: "claude-team:spawn-teammate"
+- args: "critic --team specify-{spec-id}"
+  (WINDOW_MODE일 때 끝에 --window 추가)
+
+→ 스폰 완료 후:
+SendMessage tool:
+- type: "message"
+- recipient: "critic"
+- content: |
     사용자가 다음 기능을 요청했습니다: {사용자 요청 요약}
 
     프로젝트 루트: {PROJECT_ROOT}
@@ -283,6 +321,7 @@ Task tool:
     pm과 architect의 분석 결과를 비판적으로 검토해주세요.
     팀메이트들과 직접 소통하여 도전 질문, 리스크, 대안을 논의하세요.
     완료되면 리더에게 Devil's Advocate Review를 보고해주세요.
+- summary: "critic 작업 지시"
 ```
 
 ### Step 4: 팀메이트 결과 수집
@@ -480,7 +519,7 @@ Write tool:
 
 ```markdown
 Spec/Plan이 저장되지 않았습니다.
-나중에 다시 시작하려면: /oh-my-speckit:specify [기능 설명]
+나중에 다시 시작하려면: /oh-my-speckit:specify-gpt [기능 설명]
 ```
 
 **Phase 4 완료 시:** TaskUpdate로 Phase 4 태스크를 `completed`로 변경
@@ -491,7 +530,7 @@ Spec/Plan이 저장되지 않았습니다.
 
 ### Step 1: 팀메이트 종료
 
-각 팀메이트에게 shutdown_request를 전송합니다:
+각 팀메이트에게 shutdown_request 전송:
 
 ```
 SendMessage tool:

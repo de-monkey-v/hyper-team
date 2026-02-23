@@ -1,15 +1,15 @@
 ---
-description: 구현 검증 및 대화형 수정 (Agent Teams, Claude 네이티브)
-argument-hint: [spec-id] [--quick|--full]
+description: 구현 검증 및 대화형 수정 (Agent Teams, GPT 모드)
+argument-hint: [spec-id] [--quick|--full] [--window] [--no-window]
 allowed-tools: Read, Write, Edit, Grep, Glob, Bash, AskUserQuestion, Task, Skill, TaskCreate, TaskUpdate, TaskList, TeamCreate, TeamDelete, SendMessage
 ---
 
-# Verify Command
+# Verify GPT Command
 
 구현을 검증하고 문제를 대화형으로 수정합니다.
-Claude Code 네이티브 Task tool로 팀메이트를 스폰하고, Agent Teams 프로토콜로 병렬 검증합니다.
+GPT 모드(cli-proxy-api)로 팀메이트를 스폰하고, Agent Teams 프로토콜로 병렬 검증합니다.
 
-> GPT 모드(cli-proxy-api)가 필요하면: `/oh-my-speckit:verify-gpt [spec-id] [--quick|--full]`
+> Claude 네이티브 모드가 필요하면: `/oh-my-speckit:verify [spec-id] [--quick|--full]`
 
 **핵심 원칙**:
 - **리더(이 커맨드)는 사용자와 소통하고 팀을 조율** - 코드 직접 수정 금지
@@ -46,17 +46,16 @@ Phase 4: 최종 리포트 + 팀 해산
 | 0 | 3 | 기존 태스크 정리 | TaskList, TaskUpdate |
 | 0 | 4 | 태스크 등록 | TaskCreate |
 | 2 | 1 | 팀 생성 | TeamCreate |
-| 2 | 2 | role-templates 참조하여 팀 구성 | Skill |
-| 2 | 3 | 팀메이트 스폰 (qa, critic 등) | Task tool |
+| 2 | 2 | 스폰 모드 설정 | arguments 파싱 |
+| 2 | 3 | 팀메이트 스폰 (qa, critic 등) | Skill (spawn-teammate) |
 | 2 | 4 | 결과 수집 | SendMessage 수신 |
-| 3 | 3 | 수정 시 developer 스폰 | Task tool |
-| 4 | 2 | 팀 해산 | TeamDelete |
+| 3 | 3 | 수정 시 developer 스폰 | Skill (spawn-teammate) |
+| 4 | 2 | 팀 해산 | SendMessage (shutdown), TeamDelete |
 
 **금지 사항:**
 - 리더가 직접 테스트 실행
 - 리더가 직접 요구사항 검증
 - 리더가 직접 코드 수정
-- spawn-teammate Skill 사용 (GPT 모드는 `/oh-my-speckit:verify-gpt` 사용)
 
 ---
 
@@ -117,6 +116,18 @@ TEAM_NAME="verify-{spec-id}"
 **팀이 존재하면 자동 정리:**
 
 ```bash
+CONFIG="$HOME/.claude/teams/$TEAM_NAME/config.json"
+if [ -f "$CONFIG" ]; then
+  # 활성 멤버 tmux pane 종료
+  jq -r '.members[] | select(.isActive==true and .tmuxPaneId!=null and .tmuxPaneId!="") | .tmuxPaneId' "$CONFIG" 2>/dev/null | while read -r pane_id; do
+    tmux kill-pane -t "$pane_id" 2>/dev/null || true
+  done
+  # window 모드 정리
+  tmux list-windows -a -F "#{window_id} #{window_name}" 2>/dev/null | grep "${TEAM_NAME}-" | while read -r wid _; do
+    tmux kill-window -t "$wid" 2>/dev/null || true
+  done
+fi
+# 디렉토리 정리
 rm -rf "$HOME/.claude/teams/$TEAM_NAME"
 rm -rf "$HOME/.claude/tasks/$TEAM_NAME"
 ```
@@ -211,7 +222,7 @@ TeamCreate tool:
 - description: "Verify {spec-id}: 구현 검증"
 ```
 
-### Step 2: role-templates 참조하여 팀 구성
+### Step 2: 스폰 모드 설정
 
 ```
 Skill tool:
@@ -226,31 +237,50 @@ Skill tool:
 | Medium / 표준 | qa + critic |
 | Large / 완전 | qa + architect + critic |
 
+**윈도우 모드 설정:**
+
+**Config 읽기:**
+```
+Read tool: ${PROJECT_ROOT}/.specify/config.json
+```
+파일이 없거나 읽기 실패 시 `{}` 으로 간주.
+
+**WINDOW_MODE 결정 (우선순위: CLI > config > default):**
+1. arguments에 `--window` 포함 → WINDOW_MODE = true
+2. arguments에 `--no-window` 포함 → WINDOW_MODE = false
+3. 위 둘 다 없으면 → config의 `spawnWindow` 필드가 `true` → WINDOW_MODE = true
+4. 기본값 → WINDOW_MODE = false
+
+WINDOW_MODE일 때: spawn-teammate에 `--window` 전달
+
 ### Step 3: 팀메이트 스폰 + 검증 지시 (병렬)
 
-Task tool로 팀메이트를 스폰합니다. prompt에 작업 지시를 직접 포함하므로 별도 SendMessage가 불필요합니다.
+spawn-teammate Skill로 팀메이트를 스폰한 뒤, SendMessage로 고수준 목표를 전달합니다.
 팀메이트는 자율적으로 세부 검증을 수행하고, 필요시 팀메이트 간 직접 소통합니다.
 
-**역할-에이전트 매핑:**
+**역할 매핑:**
 
-| 역할 | subagent_type |
-|------|--------------|
-| qa | claude-team:tester |
-| critic | claude-team:reviewer |
-| architect | claude-team:architect |
+| 역할 | 스폰 방식 |
+|------|----------|
+| qa | spawn-teammate (GPT 모드) |
+| critic | spawn-teammate (GPT 모드) |
+| architect | spawn-teammate (GPT 모드) |
 
 ---
 
 **qa 스폰 (필수):**
 
 ```
-Task tool:
-- subagent_type: "claude-team:tester"
-- team_name: "verify-{spec-id}"
-- name: "qa"
-- description: "qa: 테스트 검증"
-- run_in_background: true
-- prompt: |
+Skill tool:
+- skill: "claude-team:spawn-teammate"
+- args: "qa --team verify-{spec-id}"
+  (WINDOW_MODE일 때 끝에 --window 추가)
+
+-> 스폰 완료 후:
+SendMessage tool:
+- type: "message"
+- recipient: "qa"
+- content: |
     spec.md 경로: ${PROJECT_ROOT}/.specify/specs/{spec-id}/spec.md
     plan.md 경로: ${PROJECT_ROOT}/.specify/specs/{spec-id}/plan.md
     프로젝트 루트: {PROJECT_ROOT}
@@ -260,6 +290,7 @@ Task tool:
     구현을 검증해주세요: 타입 체크, 린트, 테스트 실행, 커버리지, 코드 품질 분석.
     critic 팀메이트가 있으면 검증 결과를 공유하세요.
     완료되면 리더에게 결과를 보고해주세요.
+- summary: "qa 검증 작업 지시"
 ```
 
 ---
@@ -267,13 +298,16 @@ Task tool:
 **critic 스폰 (Medium 이상):**
 
 ```
-Task tool:
-- subagent_type: "claude-team:reviewer"
-- team_name: "verify-{spec-id}"
-- name: "critic"
-- description: "critic: 비판적 검토"
-- run_in_background: true
-- prompt: |
+Skill tool:
+- skill: "claude-team:spawn-teammate"
+- args: "critic --team verify-{spec-id}"
+  (WINDOW_MODE일 때 끝에 --window 추가)
+
+-> 스폰 완료 후:
+SendMessage tool:
+- type: "message"
+- recipient: "critic"
+- content: |
     spec.md 경로: ${PROJECT_ROOT}/.specify/specs/{spec-id}/spec.md
     plan.md 경로: ${PROJECT_ROOT}/.specify/specs/{spec-id}/plan.md
     프로젝트 루트: {PROJECT_ROOT}
@@ -281,6 +315,7 @@ Task tool:
     구현이 요구사항을 충족하는지 비판적으로 검토해주세요.
     qa 팀메이트와 검증 결과를 공유하고 누락된 테스트 시나리오를 찾아주세요.
     완료되면 리더에게 Devil's Advocate Review를 보고해주세요.
+- summary: "critic 검증 작업 지시"
 ```
 
 ---
@@ -288,13 +323,16 @@ Task tool:
 **architect 스폰 (Large만):**
 
 ```
-Task tool:
-- subagent_type: "claude-team:architect"
-- team_name: "verify-{spec-id}"
-- name: "architect"
-- description: "architect: 아키텍처 검증"
-- run_in_background: true
-- prompt: |
+Skill tool:
+- skill: "claude-team:spawn-teammate"
+- args: "architect --team verify-{spec-id}"
+  (WINDOW_MODE일 때 끝에 --window 추가)
+
+-> 스폰 완료 후:
+SendMessage tool:
+- type: "message"
+- recipient: "architect"
+- content: |
     spec.md 경로: ${PROJECT_ROOT}/.specify/specs/{spec-id}/spec.md
     plan.md 경로: ${PROJECT_ROOT}/.specify/specs/{spec-id}/plan.md
     프로젝트 루트: {PROJECT_ROOT}
@@ -302,6 +340,7 @@ Task tool:
     아키텍처 정합성을 검증해주세요: FR 매핑, Breaking Change, 패턴 준수.
     qa, critic 팀메이트와 검증 결과를 공유하세요.
     완료되면 리더에게 결과를 보고해주세요.
+- summary: "architect 검증 작업 지시"
 ```
 
 ### Step 4: 결과 수집
@@ -361,17 +400,21 @@ AskUserQuestion:
 자동 수정이 필요한 경우 developer 팀메이트를 스폰:
 
 ```
-Task tool:
-- subagent_type: "claude-team:implementer"
-- team_name: "verify-{spec-id}"
-- name: "developer"
-- description: "developer: 검증 실패 수정"
-- run_in_background: true
-- prompt: |
+Skill tool:
+- skill: "claude-team:spawn-teammate"
+- args: "developer --team verify-{spec-id}"
+  (WINDOW_MODE일 때 끝에 --window 추가)
+
+-> 스폰 완료 후:
+SendMessage tool:
+- type: "message"
+- recipient: "developer"
+- content: |
     검증 실패 항목을 수정해주세요.
     기존 패턴 유지, 최소한의 수정으로 문제를 해결하세요.
     수정 완료 후 qa 팀메이트에게 재검증을 요청하세요.
     완료되면 리더에게 결과를 보고해주세요.
+- summary: "developer 수정 작업 지시"
 ```
 
 **수정 지시:**
@@ -550,13 +593,11 @@ AskUserQuestion:
 - 어떻게: npm install missing-package
 
 ### 재진입 안내
--> 코드 수정 후: /oh-my-speckit:implement {spec-id}
--> 검증 재실행: /oh-my-speckit:verify {spec-id}
+-> 코드 수정 후: /oh-my-speckit:implement-gpt {spec-id}
+-> 검증 재실행: /oh-my-speckit:verify-gpt {spec-id}
 ```
 
 ### Step 2: 팀메이트 종료 + 팀 삭제
-
-각 팀메이트에게 shutdown_request를 전송합니다:
 
 ```
 SendMessage tool:
@@ -564,10 +605,8 @@ SendMessage tool:
 - recipient: "qa"
 - content: "Verify 완료, 팀을 해산합니다."
 
-(critic, architect, developer도 동일 — 생성된 팀메이트만)
-```
+(critic, architect, developer도 동일 -- 생성된 팀메이트만)
 
-```
 TeamDelete tool
 ```
 
@@ -605,7 +644,7 @@ TaskUpdate (각 태스크) -> status: "deleted"
 
 | 실패 유형 | 재진입 커맨드 |
 |----------|------------|
-| 타입/린트/테스트/빌드 에러 | /oh-my-speckit:implement {spec-id} |
-| 요구사항 미충족 (구현) | /oh-my-speckit:implement {spec-id} |
-| 요구사항 미충족 (설계) | /oh-my-speckit:specify {spec-id} |
-| 스펙 불명확 | /oh-my-speckit:specify {spec-id} |
+| 타입/린트/테스트/빌드 에러 | /oh-my-speckit:implement-gpt {spec-id} |
+| 요구사항 미충족 (구현) | /oh-my-speckit:implement-gpt {spec-id} |
+| 요구사항 미충족 (설계) | /oh-my-speckit:specify-gpt {spec-id} |
+| 스펙 불명확 | /oh-my-speckit:specify-gpt {spec-id} |

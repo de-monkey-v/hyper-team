@@ -1,15 +1,15 @@
 ---
-description: plan.md 기반 코드 구현 (Agent Teams, Claude 네이티브)
-argument-hint: [spec-id] [--interactive]
+description: plan.md 기반 코드 구현 (Agent Teams, GPT 모드)
+argument-hint: [spec-id] [--interactive] [--window] [--no-window]
 allowed-tools: Read, Write, Edit, Grep, Glob, Bash, AskUserQuestion, Task, Skill, TaskCreate, TaskUpdate, TaskList, TeamCreate, TeamDelete, SendMessage
 ---
 
-# Implement Command
+# Implement GPT Command
 
 spec.md와 plan.md를 기반으로 코드를 구현합니다.
-Claude Code 네이티브 Task tool로 팀메이트를 스폰하고, Agent Teams 프로토콜로 협업합니다.
+GPT 모드(cli-proxy-api)로 팀메이트를 스폰하고, Agent Teams 프로토콜로 협업합니다.
 
-> GPT 모드(cli-proxy-api)가 필요하면: `/oh-my-speckit:implement-gpt [spec-id] [--interactive]`
+> Claude 네이티브 모드가 필요하면: `/oh-my-speckit:implement [spec-id] [--interactive]`
 
 **핵심 원칙**:
 - **리더(이 커맨드)는 사용자와 소통하고 팀을 조율** - 코드 직접 작성 금지
@@ -55,17 +55,16 @@ Phase 4: 마무리 (완료 요약, 팀 해산)
 | 0 | 3 | 기존 태스크 정리 | TaskList, TaskUpdate |
 | 0 | 4 | 태스크 등록 | TaskCreate |
 | 1 | 1 | 팀 생성 | TeamCreate |
-| 1 | 3 | 팀메이트 스폰 (developer, qa 등) | Task tool |
+| 1 | 3 | 팀메이트 스폰 (developer, qa 등) | Skill (spawn-teammate) |
 | 2 | 2 | 구현 + 검증 지시 | SendMessage to developer |
 | 3 | 1 | 전체 테스트 위임 | SendMessage to qa |
-| 4 | 2 | 팀 해산 | TeamDelete |
+| 4 | 2 | 팀 해산 | SendMessage (shutdown), TeamDelete |
 
 **금지 사항:**
 - 리더가 직접 코드 작성
 - 리더가 직접 테스트 실행
 - 리더가 직접 품질 검사 수행
 - plan.md의 체크박스를 "verify에서 확인할 항목"으로 건너뛰기 - 모든 체크박스는 implement에서 100% 완료
-- spawn-teammate Skill 사용 (GPT 모드는 `/oh-my-speckit:implement-gpt` 사용)
 
 ---
 
@@ -86,6 +85,22 @@ code-generation 스킬의 지식(기존 코드 우선 원칙, 패턴 준수)을 
 - arguments에서 spec-id 추출 (`--interactive` 옵션 제거)
 - `--interactive` 포함 -> AUTO_MODE = false
 
+**윈도우 모드 설정:**
+
+**Config 읽기:**
+```
+Read tool: ${PROJECT_ROOT}/.specify/config.json
+```
+파일이 없거나 읽기 실패 시 `{}` 으로 간주.
+
+**WINDOW_MODE 결정 (우선순위: CLI > config > default):**
+1. arguments에 `--window` 포함 → WINDOW_MODE = true
+2. arguments에 `--no-window` 포함 → WINDOW_MODE = false
+3. 위 둘 다 없으면 → config의 `spawnWindow` 필드가 `true` → WINDOW_MODE = true
+4. 기본값 → WINDOW_MODE = false
+
+WINDOW_MODE일 때: spawn-teammate에 `--window` 전달
+
 **spec-id 미지정 시:**
 ```
 Glob tool:
@@ -100,7 +115,7 @@ Read tool: ${PROJECT_ROOT}/.specify/specs/{spec-id}/spec.md
 Read tool: ${PROJECT_ROOT}/.specify/specs/{spec-id}/plan.md
 ```
 
-**plan.md가 없으면:** `/oh-my-speckit:specify {spec-id}` 안내 후 중단.
+**plan.md가 없으면:** `/oh-my-speckit:specify-gpt {spec-id}` 안내 후 중단.
 
 **파싱 항목:**
 - FR 매핑 테이블
@@ -184,6 +199,18 @@ TEAM_NAME="implement-{spec-id}"
 **팀이 존재하면 자동 정리:**
 
 ```bash
+CONFIG="$HOME/.claude/teams/$TEAM_NAME/config.json"
+if [ -f "$CONFIG" ]; then
+  # 활성 멤버 tmux pane 종료
+  jq -r '.members[] | select(.isActive==true and .tmuxPaneId!=null and .tmuxPaneId!="") | .tmuxPaneId' "$CONFIG" 2>/dev/null | while read -r pane_id; do
+    tmux kill-pane -t "$pane_id" 2>/dev/null || true
+  done
+  # window 모드 정리
+  tmux list-windows -a -F "#{window_id} #{window_name}" 2>/dev/null | grep "${TEAM_NAME}-" | while read -r wid _; do
+    tmux kill-window -t "$wid" 2>/dev/null || true
+  done
+fi
+# 디렉토리 정리
 rm -rf "$HOME/.claude/teams/$TEAM_NAME"
 rm -rf "$HOME/.claude/tasks/$TEAM_NAME"
 ```
@@ -260,25 +287,19 @@ Medium/Large에서 developer x2가 필요한 경우, fullstack 프로젝트 여�
 - FE + BE 디렉토리 모두 존재 → fullstack → developer x2 대신 **frontend-dev + backend-dev**
 - 그 외 → **developer-1 + developer-2** (동일 역할 병렬화)
 
-### Step 3: 팀메이트 스폰 (병렬)
+### Step 3: 팀메이트 스폰
 
-Task tool로 팀메이트를 스폰합니다. prompt에 작업 지시를 직접 포함하므로 별도 SendMessage가 불필요합니다.
+spawn-teammate Skill로 팀메이트를 스폰한 뒤, SendMessage로 고수준 목표를 전달합니다.
 팀메이트는 자율적으로 세부 구현을 수행하고, 필요시 팀메이트 간 직접 소통합니다.
 
-**역할-에이전트 매핑:**
+**역할 매핑:**
 
-| 역할 | 기본 subagent_type | 프레임워크 오버라이드 |
-|------|-------------------|---------------------|
-| developer (Small 단일) | claude-team:implementer | BACKEND: spring→spring-expert, fastapi→fastapi-expert, nestjs→nestjs-expert |
-| developer-1 (Medium+ 복수) | claude-team:implementer | BACKEND: spring→spring-expert, fastapi→fastapi-expert, nestjs→nestjs-expert |
-| developer-2 (Medium+ 복수) | claude-team:implementer | (developer-1과 동일한 오버라이드) |
-| frontend-dev | claude-team:frontend | FRONTEND: nextjs→nextjs-expert, nuxt→nuxt-expert, react→react-expert, vue→vue-expert |
-| backend-dev | claude-team:backend | BACKEND: spring→spring-expert, nestjs→nestjs-expert, fastapi→fastapi-expert |
-| qa | claude-team:tester | (오버라이드 없음) |
-| architect | claude-team:architect | (오버라이드 없음) |
-
-프레임워크 감지 결과(Step 2.7)에 따라 에이전트 타입을 동적으로 선택합니다.
-예: BACKEND_FRAMEWORK=spring → developer의 subagent_type이 `claude-team:spring-expert`로 변경
+| 역할 | 스폰 방식 |
+|------|----------|
+| developer / developer-1 / developer-2 | spawn-teammate (GPT 모드) |
+| frontend-dev / backend-dev | spawn-teammate (GPT 모드) |
+| qa | spawn-teammate (GPT 모드) |
+| architect | spawn-teammate (GPT 모드) |
 
 ---
 
@@ -287,14 +308,16 @@ Task tool로 팀메이트를 스폰합니다. prompt에 작업 지시를 직접 
 **Small (1명):** 번호 없이 `developer`로 스폰
 
 ```
-Task tool:
-- subagent_type: "claude-team:{DETECTED_AGENT}"
-  (DETECTED_AGENT: BACKEND_FRAMEWORK 감지시 해당 전문가, 미감지시 implementer)
-- team_name: "implement-{spec-id}"
-- name: "developer"
-- description: "developer: 코드 구현"
-- run_in_background: true
-- prompt: |
+Skill tool:
+- skill: "claude-team:spawn-teammate"
+- args: "developer --team implement-{spec-id}"
+  (WINDOW_MODE일 때 끝에 --window 추가)
+
+→ 스폰 완료 후:
+SendMessage tool:
+- type: "message"
+- recipient: "developer"
+- content: |
     plan.md 경로: ${PROJECT_ROOT}/.specify/specs/{spec-id}/plan.md
 
     plan.md의 체크리스트를 순서대로 구현해주세요.
@@ -302,19 +325,22 @@ Task tool:
     완료된 항목은 plan.md 체크박스를 업데이트해주세요.
     qa 팀메이트와 구현 완료 시 검증을 협의하세요.
     완료되면 리더에게 변경 파일 목록과 결과를 보고해주세요.
+- summary: "developer 작업 지시"
 ```
 
 **Medium+ non-fullstack (2명):** `developer-1`, `developer-2`로 스폰
 
 ```
-Task tool:
-- subagent_type: "claude-team:{DETECTED_AGENT}"
-  (DETECTED_AGENT: BACKEND_FRAMEWORK 감지시 해당 전문가, 미감지시 implementer)
-- team_name: "implement-{spec-id}"
-- name: "developer-1"
-- description: "developer-1: 코드 구현"
-- run_in_background: true
-- prompt: |
+Skill tool:
+- skill: "claude-team:spawn-teammate"
+- args: "developer-1 --team implement-{spec-id}"
+  (WINDOW_MODE일 때 끝에 --window 추가)
+
+→ 스폰 완료 후:
+SendMessage tool:
+- type: "message"
+- recipient: "developer-1"
+- content: |
     plan.md 경로: ${PROJECT_ROOT}/.specify/specs/{spec-id}/plan.md
 
     plan.md의 체크리스트를 순서대로 구현해주세요.
@@ -322,15 +348,18 @@ Task tool:
     완료된 항목은 plan.md 체크박스를 업데이트해주세요.
     qa 팀메이트와 구현 완료 시 검증을 협의하세요.
     완료되면 리더에게 변경 파일 목록과 결과를 보고해주세요.
+- summary: "developer-1 작업 지시"
 
-Task tool:
-- subagent_type: "claude-team:{DETECTED_AGENT}"
-  (DETECTED_AGENT: developer-1과 동일한 오버라이드 적용)
-- team_name: "implement-{spec-id}"
-- name: "developer-2"
-- description: "developer-2: 코드 구현"
-- run_in_background: true
-- prompt: |
+Skill tool:
+- skill: "claude-team:spawn-teammate"
+- args: "developer-2 --team implement-{spec-id}"
+  (WINDOW_MODE일 때 끝에 --window 추가)
+
+→ 스폰 완료 후:
+SendMessage tool:
+- type: "message"
+- recipient: "developer-2"
+- content: |
     plan.md 경로: ${PROJECT_ROOT}/.specify/specs/{spec-id}/plan.md
 
     plan.md의 체크리스트를 순서대로 구현해주세요.
@@ -338,19 +367,22 @@ Task tool:
     완료된 항목은 plan.md 체크박스를 업데이트해주세요.
     qa 팀메이트와 구현 완료 시 검증을 협의하세요.
     완료되면 리더에게 변경 파일 목록과 결과를 보고해주세요.
+- summary: "developer-2 작업 지시"
 ```
 
 **frontend-dev 생성 (fullstack 프로젝트, Medium 이상):**
 
 ```
-Task tool:
-- subagent_type: "claude-team:{DETECTED_AGENT}"
-  (DETECTED_AGENT: FRONTEND_FRAMEWORK 감지시 해당 전문가, 미감지시 frontend)
-- team_name: "implement-{spec-id}"
-- name: "frontend-dev"
-- description: "frontend-dev: 프론트엔드 구현"
-- run_in_background: true
-- prompt: |
+Skill tool:
+- skill: "claude-team:spawn-teammate"
+- args: "frontend-dev --team implement-{spec-id}"
+  (WINDOW_MODE일 때 끝에 --window 추가)
+
+→ 스폰 완료 후:
+SendMessage tool:
+- type: "message"
+- recipient: "frontend-dev"
+- content: |
     plan.md 경로: ${PROJECT_ROOT}/.specify/specs/{spec-id}/plan.md
 
     plan.md의 체크리스트 중 프론트엔드 관련 항목을 순서대로 구현해주세요.
@@ -360,19 +392,22 @@ Task tool:
     완료된 항목은 plan.md 체크박스를 업데이트해주세요.
     qa 팀메이트와 구현 완료 시 검증을 협의하세요.
     완료되면 리더에게 변경 파일 목록과 결과를 보고해주세요.
+- summary: "frontend-dev 작업 지시"
 ```
 
 **backend-dev 생성 (fullstack 프로젝트, Medium 이상):**
 
 ```
-Task tool:
-- subagent_type: "claude-team:{DETECTED_AGENT}"
-  (DETECTED_AGENT: BACKEND_FRAMEWORK 감지시 해당 전문가, 미감지시 backend)
-- team_name: "implement-{spec-id}"
-- name: "backend-dev"
-- description: "backend-dev: 백엔드 구현"
-- run_in_background: true
-- prompt: |
+Skill tool:
+- skill: "claude-team:spawn-teammate"
+- args: "backend-dev --team implement-{spec-id}"
+  (WINDOW_MODE일 때 끝에 --window 추가)
+
+→ 스폰 완료 후:
+SendMessage tool:
+- type: "message"
+- recipient: "backend-dev"
+- content: |
     plan.md 경로: ${PROJECT_ROOT}/.specify/specs/{spec-id}/plan.md
 
     plan.md의 체크리스트 중 백엔드 관련 항목을 순서대로 구현해주세요.
@@ -382,42 +417,51 @@ Task tool:
     완료된 항목은 plan.md 체크박스를 업데이트해주세요.
     qa 팀메이트와 구현 완료 시 검증을 협의하세요.
     완료되면 리더에게 변경 파일 목록과 결과를 보고해주세요.
+- summary: "backend-dev 작업 지시"
 ```
 
 **qa 생성 (필수):**
 
 ```
-Task tool:
-- subagent_type: "claude-team:tester"
-- team_name: "implement-{spec-id}"
-- name: "qa"
-- description: "qa: 테스트 검증"
-- run_in_background: true
-- prompt: |
+Skill tool:
+- skill: "claude-team:spawn-teammate"
+- args: "qa --team implement-{spec-id}"
+  (WINDOW_MODE일 때 끝에 --window 추가)
+
+→ 스폰 완료 후:
+SendMessage tool:
+- type: "message"
+- recipient: "qa"
+- content: |
     plan.md 경로: ${PROJECT_ROOT}/.specify/specs/{spec-id}/plan.md
 
     developer 팀메이트가 구현을 완료하면 검증해주세요.
     developer와 직접 소통하여 변경 파일과 검증 범위를 확인하세요.
     타입 체크, 린트, 테스트 작성/실행, 커버리지를 확인해주세요.
     완료되면 리더에게 검증 결과를 보고해주세요.
+- summary: "qa 작업 지시"
 ```
 
 **architect 생성 (Large만):**
 
 ```
-Task tool:
-- subagent_type: "claude-team:architect"
-- team_name: "implement-{spec-id}"
-- name: "architect"
-- description: "architect: 아키텍처 가이드"
-- run_in_background: true
-- prompt: |
+Skill tool:
+- skill: "claude-team:spawn-teammate"
+- args: "architect --team implement-{spec-id}"
+  (WINDOW_MODE일 때 끝에 --window 추가)
+
+→ 스폰 완료 후:
+SendMessage tool:
+- type: "message"
+- recipient: "architect"
+- content: |
     plan.md 경로: ${PROJECT_ROOT}/.specify/specs/{spec-id}/plan.md
 
     developer들의 작업 간 충돌을 방지하고 공통 인터페이스/타입을 사전 정의해주세요.
     통합 시점에서 일관성을 검증하고 아키텍처 패턴 준수를 확인해주세요.
     developer, qa 팀메이트와 직접 소통하여 협업하세요.
     완료되면 리더에게 결과를 보고해주세요.
+- summary: "architect 작업 지시"
 ```
 
 ### Step 4: Plan에서 구현 계획 추출 및 Phase Group 분류
@@ -570,7 +614,7 @@ AskUserQuestion:
 ```markdown
 구현 중단 - 진행 상황 저장됨
 - 완료된 Group: N/M
-- 재진입: /oh-my-speckit:implement {spec-id}
+- 재진입: /oh-my-speckit:implement-gpt {spec-id}
   (완료된 Phase는 스킵됨)
 ```
 
@@ -673,8 +717,6 @@ Read tool: plan.md -> 모든 체크박스 [x] 여부 확인
 
 ### Step 2: 팀메이트 종료 + 팀 삭제
 
-각 팀메이트에게 shutdown_request를 전송합니다:
-
 ```
 SendMessage tool:
 - type: "shutdown_request"
@@ -682,9 +724,7 @@ SendMessage tool:
 - content: "Implement 완료, 팀을 해산합니다."
 
 (qa, developer-1/developer-2/frontend-dev/backend-dev, architect도 동일 — 생성된 팀메이트만)
-```
 
-```
 TeamDelete tool
 ```
 
@@ -710,7 +750,7 @@ TeamDelete tool
 | Group 3 | 통합 | ok |
 
 ### 다음 단계
--> 검증: /oh-my-speckit:verify {spec-id}
+-> 검증: /oh-my-speckit:verify-gpt {spec-id}
 -> PR 생성: gh pr create
 ```
 
