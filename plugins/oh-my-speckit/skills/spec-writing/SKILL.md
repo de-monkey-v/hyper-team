@@ -52,7 +52,7 @@ specify → implement → verify
 - US-001: As a [user], I want [goal] so that [benefit]
 
 ## 기능 요구사항 (FR)
-- FR-001: [검증 가능한 요구사항]
+- FR-001: [검증 가능한 요구사항] | AC: [합격 기준]
 
 ## 비기능 요구사항 (NFR)
 - NFR-001: [측정 가능한 기준]
@@ -60,6 +60,18 @@ specify → implement → verify
 ## 엣지 케이스
 - EC-001: [경계 조건]
 ```
+
+## AC(합격 기준) 가이드
+
+각 FR에는 반드시 AC(Acceptance Criteria)를 포함합니다.
+
+| 원칙 | 설명 |
+|------|------|
+| 구체적 | 입력 → 동작 → 기대 결과 |
+| 검증 가능 | 코드/테스트로 확인 가능 |
+| FR당 1-3개 | 너무 많으면 FR 분리 |
+
+AC는 implement 단계에서 developer의 자가 검증 기준이 되고, qa의 요구사항 충족 검증 기준이 됩니다.
 
 ## 호환성 옵션 (Phase 2.5)
 

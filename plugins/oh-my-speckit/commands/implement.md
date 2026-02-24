@@ -298,12 +298,16 @@ Task tool:
 - description: "developer: 코드 구현"
 - run_in_background: true
 - prompt: |
+    spec.md 경로: ${PROJECT_ROOT}/.specify/specs/{spec-id}/spec.md
     plan.md 경로: ${PROJECT_ROOT}/.specify/specs/{spec-id}/plan.md
 
+    **먼저 spec.md를 Read하여 FR/AC(합격 기준)를 파악하세요.**
     plan.md의 체크리스트를 순서대로 구현해주세요.
     재사용 분석 섹션을 먼저 확인하고, 기존 코드 패턴을 따르세요.
+    **각 체크박스 완료 시 해당 FR의 AC 기준 충족 여부를 자가 확인하세요.**
     완료된 항목은 plan.md 체크박스를 업데이트해주세요.
     qa 팀메이트와 구현 완료 시 검증을 협의하세요.
+    **완료 보고 시 FR 충족 상태(N/M)도 포함해주세요.**
     완료되면 리더에게 변경 파일 목록과 결과를 보고해주세요.
 ```
 
@@ -318,12 +322,16 @@ Task tool:
 - description: "developer-1: 코드 구현"
 - run_in_background: true
 - prompt: |
+    spec.md 경로: ${PROJECT_ROOT}/.specify/specs/{spec-id}/spec.md
     plan.md 경로: ${PROJECT_ROOT}/.specify/specs/{spec-id}/plan.md
 
+    **먼저 spec.md를 Read하여 FR/AC(합격 기준)를 파악하세요.**
     plan.md의 체크리스트를 순서대로 구현해주세요.
     재사용 분석 섹션을 먼저 확인하고, 기존 코드 패턴을 따르세요.
+    **각 체크박스 완료 시 해당 FR의 AC 기준 충족 여부를 자가 확인하세요.**
     완료된 항목은 plan.md 체크박스를 업데이트해주세요.
     qa 팀메이트와 구현 완료 시 검증을 협의하세요.
+    **완료 보고 시 FR 충족 상태(N/M)도 포함해주세요.**
     완료되면 리더에게 변경 파일 목록과 결과를 보고해주세요.
 
 Task tool:
@@ -334,12 +342,16 @@ Task tool:
 - description: "developer-2: 코드 구현"
 - run_in_background: true
 - prompt: |
+    spec.md 경로: ${PROJECT_ROOT}/.specify/specs/{spec-id}/spec.md
     plan.md 경로: ${PROJECT_ROOT}/.specify/specs/{spec-id}/plan.md
 
+    **먼저 spec.md를 Read하여 FR/AC(합격 기준)를 파악하세요.**
     plan.md의 체크리스트를 순서대로 구현해주세요.
     재사용 분석 섹션을 먼저 확인하고, 기존 코드 패턴을 따르세요.
+    **각 체크박스 완료 시 해당 FR의 AC 기준 충족 여부를 자가 확인하세요.**
     완료된 항목은 plan.md 체크박스를 업데이트해주세요.
     qa 팀메이트와 구현 완료 시 검증을 협의하세요.
+    **완료 보고 시 FR 충족 상태(N/M)도 포함해주세요.**
     완료되면 리더에게 변경 파일 목록과 결과를 보고해주세요.
 ```
 
@@ -354,14 +366,18 @@ Task tool:
 - description: "frontend-dev: 프론트엔드 구현"
 - run_in_background: true
 - prompt: |
+    spec.md 경로: ${PROJECT_ROOT}/.specify/specs/{spec-id}/spec.md
     plan.md 경로: ${PROJECT_ROOT}/.specify/specs/{spec-id}/plan.md
 
+    **먼저 spec.md를 Read하여 FR/AC(합격 기준)를 파악하세요.**
     plan.md의 체크리스트 중 프론트엔드 관련 항목을 순서대로 구현해주세요.
     재사용 분석 섹션을 먼저 확인하고, 기존 코드 패턴을 따르세요.
     담당 영역: UI 컴포넌트, 페이지, 클라이언트 상태 관리, API 호출 레이어
     백엔드 코드는 직접 수정하지 마세요 (backend-dev 담당).
+    **각 체크박스 완료 시 해당 FR의 AC 기준 충족 여부를 자가 확인하세요.**
     완료된 항목은 plan.md 체크박스를 업데이트해주세요.
     qa 팀메이트와 구현 완료 시 검증을 협의하세요.
+    **완료 보고 시 FR 충족 상태(N/M)도 포함해주세요.**
     완료되면 리더에게 변경 파일 목록과 결과를 보고해주세요.
 ```
 
@@ -376,14 +392,18 @@ Task tool:
 - description: "backend-dev: 백엔드 구현"
 - run_in_background: true
 - prompt: |
+    spec.md 경로: ${PROJECT_ROOT}/.specify/specs/{spec-id}/spec.md
     plan.md 경로: ${PROJECT_ROOT}/.specify/specs/{spec-id}/plan.md
 
+    **먼저 spec.md를 Read하여 FR/AC(합격 기준)를 파악하세요.**
     plan.md의 체크리스트 중 백엔드 관련 항목을 순서대로 구현해주세요.
     재사용 분석 섹션을 먼저 확인하고, 기존 코드 패턴을 따르세요.
     담당 영역: API 엔드포인트, 비즈니스 로직, DB 스키마/쿼리, 인증/인가
     프론트엔드 코드는 직접 수정하지 마세요 (frontend-dev 담당).
+    **각 체크박스 완료 시 해당 FR의 AC 기준 충족 여부를 자가 확인하세요.**
     완료된 항목은 plan.md 체크박스를 업데이트해주세요.
     qa 팀메이트와 구현 완료 시 검증을 협의하세요.
+    **완료 보고 시 FR 충족 상태(N/M)도 포함해주세요.**
     완료되면 리더에게 변경 파일 목록과 결과를 보고해주세요.
 ```
 
@@ -394,14 +414,26 @@ Task tool:
 - subagent_type: "claude-team:tester"
 - team_name: "implement-{spec-id}"
 - name: "qa"
-- description: "qa: 테스트 검증"
+- description: "qa: 테스트 + 요구사항 검증"
 - run_in_background: true
 - prompt: |
+    spec.md 경로: ${PROJECT_ROOT}/.specify/specs/{spec-id}/spec.md
     plan.md 경로: ${PROJECT_ROOT}/.specify/specs/{spec-id}/plan.md
 
+    **먼저 spec.md를 Read하여 FR/AC(합격 기준)를 파악하세요.**
     developer 팀메이트가 구현을 완료하면 검증해주세요.
     developer와 직접 소통하여 변경 파일과 검증 범위를 확인하세요.
-    타입 체크, 린트, 테스트 작성/실행, 커버리지를 확인해주세요.
+
+    **검증 항목 (우선순위):**
+    1. **FR/AC 요구사항 충족 검증** -- 각 FR에 대해 AC 기준 달성 여부 확인
+    2. 타입 체크, 린트
+    3. 테스트 작성/실행, 커버리지
+
+    **보고 형식에 FR 충족 상태 포함:**
+    - FR 충족: N/M (FR1 ok, FR2 ok, FR3 미충족 - 이유: ...)
+    - 코드 품질: PASS/FAIL
+    - 테스트: N/N 통과
+
     완료되면 리더에게 검증 결과를 보고해주세요.
 ```
 
@@ -436,14 +468,17 @@ Task tool:
     외부 LLM(Gemini/Codex CLI)을 활용한 구현 자문 및 에러 분석을 수행합니다.
     3-phase 라이프사이클로 운영됩니다.
 
+    spec.md 경로: ${PROJECT_ROOT}/.specify/specs/{spec-id}/spec.md
     plan.md 경로: ${PROJECT_ROOT}/.specify/specs/{spec-id}/plan.md
     프로젝트 루트: {PROJECT_ROOT}
 
     **Phase 1 — 사전 분석 (즉시 수행):**
-    1. plan.md를 Read하여 구현 계획 파악
-    2. 수정 대상 기존 코드 파일을 Read
-    3. Gemini CLI로 분석:
+    1. spec.md를 Read하여 FR/AC(합격 기준) 파악
+    2. plan.md를 Read하여 구현 계획 파악
+    3. 수정 대상 기존 코드 파일을 Read
+    4. Gemini CLI로 분석:
        - 구현 접근법의 타당성 검증
+       - **AC 기반 구현 타당성 확인 (각 AC가 plan의 체크박스로 커버되는지)**
        - 잠재적 통합 이슈 식별
        - 따라야 할 코드 패턴 분석
     4. Codex CLI로 추가 분석 (설치되어 있는 경우):
@@ -588,6 +623,7 @@ SendMessage tool:
 | src/utils/xxx.ts | 생성 | ok |
 
 ### 검증 결과
+- **FR 충족: N/M** (FR1 ok, FR2 ok, ...)
 - 타입 체크: PASS
 - 린트: PASS
 - 테스트: 5/5 통과
@@ -694,18 +730,37 @@ AskUserQuestion:
   (완료된 Phase는 스킵됨)
 ```
 
-### Step 4: 전 Group 완료 후 체크박스 확인
+### Step 4: 전 Group 완료 후 이중 확인
 
-모든 Group 완료 후 plan.md 체크박스 진행률 확인:
+모든 Group 완료 후 **체크박스 진행률 + FR 충족률** 이중 확인:
 
 ```
 Read tool: plan.md -> [ ] vs [x] 개수 파악
+Read tool: spec.md -> FR 목록 대비 qa 보고의 FR 충족 상태 확인
 ```
 
-| 진행률 | 액션 |
-|-------|------|
-| 100% | Phase 3로 진행 |
-| < 100% | 미완료 항목 파악 -> developer에게 추가 구현 지시 |
+| 확인 항목 | 조건 | 액션 |
+|----------|------|------|
+| 체크박스 100% + FR 100% | 둘 다 충족 | Phase 3로 진행 |
+| 체크박스 < 100% | 미완료 | 미완료 항목 -> developer에게 추가 구현 지시 |
+| 체크박스 100% but FR < 100% | FR 미충족 | 미충족 FR 파악 -> developer에게 AC 기준 충족 구현 추가 지시 |
+
+**FR 미충족 시 developer 추가 지시:**
+
+```
+SendMessage tool:
+- type: "message"
+- recipient: "developer"
+- content: |
+    **FR 미충족 보완 요청**
+
+    다음 FR의 AC가 충족되지 않았습니다:
+    - FR{N}: {AC 내용} - 미충족 이유: {qa 보고에서 추출}
+
+    해당 FR의 AC를 충족하도록 추가 구현해주세요.
+    완료 후 qa에게 재검증을 요청하세요.
+- summary: "FR 미충족 보완 요청"
+```
 
 **Phase 2 완료 시:** TaskUpdate로 Phase 2 태스크를 `completed`로 변경
 

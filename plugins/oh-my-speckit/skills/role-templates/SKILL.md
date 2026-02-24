@@ -6,11 +6,13 @@ version: 3.0.0
 
 # Role Templates
 
-Agent Teams의 팀메이트 역할 정의. 커맨드(리더)가 TeamCreate 후 spawn-teammate Skill로 팀메이트를 생성할 때 이 템플릿을 참조합니다.
+Agent Teams의 팀메이트 역할 정의. 커맨드(리더)가 TeamCreate 후 팀메이트를 생성할 때 이 템플릿을 참조합니다.
+- **Claude 네이티브 모드**: Task tool로 직접 스폰 (`subagent_type` 지정)
+- **GPT 모드**: spawn-teammate Skill로 스폰
 
 ## 역할-에이전트 매핑 테이블
 
-모든 역할은 `claude-team` 플러그인의 에이전트 타입에 매핑됩니다:
+모든 역할은 `claude-team` 또는 `ai-cli-tools` 플러그인의 에이전트 타입에 매핑됩니다:
 
 | 역할 | 에이전트 타입 | 특성 | 도구 |
 |------|-------------|------|------|
@@ -21,25 +23,27 @@ Agent Teams의 팀메이트 역할 정의. 커맨드(리더)가 TeamCreate 후 s
 | backend-dev | `claude-team:backend` | 백엔드 구현 (읽기/쓰기) | Read,Write,Edit,Glob,Grep,Bash,SendMessage |
 | qa | `claude-team:tester` | 테스트/검증 (읽기/쓰기) | Read,Write,Edit,Glob,Grep,Bash,SendMessage |
 | critic | `claude-team:reviewer` | 비판적 리뷰 (읽기 전용) | Read,Glob,Grep,Bash,SendMessage |
+| llms-analyst | `ai-cli-tools:llms` | 외부 LLM 분석 (specify용) | Bash,Read,Glob,Grep,WebSearch,WebFetch |
+| llms-advisor | `ai-cli-tools:llms` | 외부 LLM 자문 (implement용) | Bash,Read,Glob,Grep,WebSearch,WebFetch |
+| llms-reviewer | `ai-cli-tools:llms` | 외부 LLM 코드 리뷰 (verify용) | Bash,Read,Glob,Grep,WebSearch,WebFetch |
 
 ## 스폰 패턴 (통합)
 
-**기본 모드** (Claude 네이티브):
+**기본 모드** (Claude 네이티브 — Task tool 직접 스폰):
 ```
-Skill tool:
-- skill: "claude-team:spawn-teammate"
-- args: "{role-name} --team {team-name} --agent-type claude-team:{agent}"
-
-→ 스폰 완료 후:
-SendMessage tool:
-- type: "message"
-- recipient: "{role-name}"
-- content: |
+Task tool:
+- subagent_type: "claude-team:{agent}" 또는 "ai-cli-tools:llms"
+- team_name: "{team-name}"
+- name: "{role-name}"
+- description: "{role-name}: 역할 설명"
+- run_in_background: true
+- prompt: |
     [고수준 목표 + 컨텍스트]
-- summary: "{role-name} 작업 지시"
 ```
 
-**GPT 모드** (`--gpt` 플래그):
+> prompt에 작업 지시를 직접 포함하므로 별도 SendMessage가 불필요합니다.
+
+**GPT 모드** (`--gpt` 플래그 — spawn-teammate Skill):
 ```
 Skill tool:
 - skill: "claude-team:spawn-teammate"
@@ -54,7 +58,7 @@ SendMessage tool:
 - summary: "{role-name} 작업 지시"
 ```
 
-**차이점**: 기본 모드는 `--agent-type`으로 에이전트의 내장 전문성을 활용. GPT 모드는 SendMessage로 역할 프롬프트를 직접 전달.
+**차이점**: 기본 모드는 Task tool로 직접 스폰하여 에이전트의 내장 전문성 활용. GPT 모드는 spawn-teammate Skill + SendMessage로 역할 프롬프트를 전달.
 
 ## 자율성 모델
 
@@ -107,25 +111,30 @@ architect 팀메이트와 기술적 타당성을 협의하세요.
 ### /oh-my-speckit:specify
 | 규모 | 팀원 | 에이전트 타입 |
 |------|------|-------------|
-| Small | pm | planner |
-| Medium | pm + architect | planner + architect |
-| Large | pm + architect + critic | planner + architect + reviewer |
+| Small | pm + llms-analyst | planner + llms |
+| Medium | pm + architect + llms-analyst | planner + architect + llms |
+| Large | pm + architect + critic + llms-analyst | planner + architect + reviewer + llms |
+
+> llms-analyst는 모든 규모에서 필수 스폰.
 
 ### /oh-my-speckit:implement
 | 규모 | 팀원 | 에이전트 타입 |
 |------|------|-------------|
-| Small | developer + qa | implementer + tester |
-| Medium | developer-1 + developer-2 + qa | implementer x2 + tester |
-| Large | architect + developer-1 + developer-2 + qa | architect + implementer x2 + tester |
+| Medium (기본) | developer + qa + llms-advisor | implementer + tester + llms |
+| Large | architect + developer-1 + developer-2 + qa + llms-advisor | architect + implementer x2 + tester + llms |
 
-*Medium/Large fullstack 프로젝트: developer-1 + developer-2 → frontend-dev + backend-dev*
+> Small 카테고리 없음 — Medium이 최소 팀 구성. llms-advisor는 모든 규모에서 필수.
+
+*Medium/Large fullstack 프로젝트: developer → frontend-dev + backend-dev*
 
 ### /oh-my-speckit:verify
 | 규모 | 팀원 | 에이전트 타입 |
 |------|------|-------------|
-| Small | qa | tester |
-| Medium | qa + critic | tester + reviewer |
-| Large | qa + architect + critic | tester + architect + reviewer |
+| Small (빠른) | qa + llms-reviewer | tester + llms |
+| Medium (표준) | qa + critic + llms-reviewer | tester + reviewer + llms |
+| Large (완전) | qa + architect + critic + llms-reviewer | tester + architect + reviewer + llms |
+
+> llms-reviewer는 모든 규모에서 필수 스폰.
 
 ## 복수 인스턴스 네이밍 규칙
 

@@ -420,10 +420,13 @@ Phase 1 팀메이트 결과 + Phase 2 결정사항을 기반으로 spec.md를 �
 
 - 개요 및 메타데이터
 - 사용자 스토리 (US)
-- 기능 요구사항 (FR)
+- 기능 요구사항 (FR) -- **각 FR에 AC(합격 기준) 필수 명시**
 - 비기능 요구사항 (NFR)
-- 엣지 케이스 (EC)
+- 엣지 케이스 (EC) -- 검증 방법 포함
 - 기술 결정 (Phase 2에서 결정된 사항)
+
+> **AC 필수**: 모든 FR에 검증 가능한 AC(Acceptance Criteria)를 포함합니다.
+> AC가 없는 FR은 implement에서 충족 판단이 불가능합니다.
 
 > spec 템플릿: skills/spec-writing/references/spec-template.md 참조
 
@@ -432,12 +435,13 @@ Phase 1 팀메이트 결과 + Phase 2 결정사항을 기반으로 spec.md를 �
 Spec + architect 분석결과를 기반으로 plan.md를 메모리에 작성:
 
 - 설계 방향 및 개요
-- FR 매핑 테이블
+- FR 매핑 테이블 -- **AC 인용 + 검증 방법 포함**
 - 재사용 분석 (architect 결과 기반)
 - 변경 파일 목록
-- 구현 단계 (Phase별 Task + 체크박스)
+- 구현 단계 (Phase별 Task + 체크박스) -- **체크박스에 FR 번호 주석 포함**
 - E2E 테스트 시나리오
 - Breaking Change 섹션 (해당시)
+- **FR별 검증 기준 섹션** -- AC 기반 검증 체크리스트
 
 > plan 템플릿: skills/plan-writing/references/plan-template.md 참조
 
@@ -458,9 +462,9 @@ Large 규모에서 critic 결과가 있으면 Devil's Advocate Review를 반영�
 
 ### Spec 요약
 - 사용자 스토리: N개
-- 기능 요구사항: N개 (P1: X개, P2: Y개)
+- 기능 요구사항: N개 (P1: X개, P2: Y개) -- **AC 포함: N/N**
 - 비기능 요구사항: N개
-- 엣지 케이스: N개
+- 엣지 케이스: N개 (검증 방법 포함)
 - 기술 결정: N개
 
 ### Plan 요약

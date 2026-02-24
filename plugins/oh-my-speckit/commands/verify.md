@@ -260,7 +260,17 @@ Task tool:
     constitution 규칙: {constitution 내용 또는 "없음"}
     변경 파일 목록: [plan.md에서 추출]
 
-    구현을 검증해주세요: 타입 체크, 린트, 테스트 실행, 커버리지, 코드 품질 분석.
+    **역할: Safety Net (implement에서 검증된 상태를 재확인)**
+
+    implement에서 이미 developer의 자가 검증과 qa 검증이 수행되었습니다.
+    verify의 qa는 implement에서 누락된 것을 잡는 **safety net** 역할입니다.
+
+    **검증 항목:**
+    1. **FR/AC 재확인** -- spec.md의 각 FR에 대해 AC 기준이 실제로 충족되었는지 코드로 확인
+    2. 타입 체크, 린트, 테스트 실행, 커버리지 -- implement qa가 통과시킨 것의 재확인
+    3. **코드 품질 심층 분석** -- implement에서 놓칠 수 있는 패턴 위반, 보안 이슈
+    4. **implement에서 누락된 FR이 없는지 교차 검증**
+
     critic 팀메이트가 있으면 검증 결과를 공유하세요.
     완료되면 리더에게 결과를 보고해주세요.
 ```
@@ -281,7 +291,13 @@ Task tool:
     plan.md 경로: ${PROJECT_ROOT}/.specify/specs/{spec-id}/plan.md
     프로젝트 루트: {PROJECT_ROOT}
 
-    구현이 요구사항을 충족하는지 비판적으로 검토해주세요.
+    **spec.md의 각 FR/AC를 기준으로** 구현이 요구사항을 충족하는지 비판적으로 검토해주세요.
+
+    **비판적 검토 초점:**
+    1. AC를 형식적으로만 충족하고 실질적으로 미충족하는 경우 식별
+    2. spec.md EC(엣지 케이스)가 실제로 처리되었는지 확인
+    3. FR 간 상호작용에서 발생하는 미충족 시나리오 탐색
+
     qa 팀메이트와 검증 결과를 공유하고 누락된 테스트 시나리오를 찾아주세요.
     완료되면 리더에게 Devil's Advocate Review를 보고해주세요.
 ```
@@ -327,11 +343,12 @@ Task tool:
     변경 파일 목록: [plan.md에서 추출]
 
     **검증 시 — 코드 리뷰 (즉시 수행):**
-    1. spec.md를 Read하여 요구사항 파악
+    1. spec.md를 Read하여 **FR/AC(합격 기준)** 파악
     2. 변경된 파일들을 Read
     3. Gemini CLI로 코드 리뷰:
        - 변경 파일을 pipe하여 gemini에게 리뷰 요청
-       - 요구사항 충족 여부 검증
+       - **각 FR의 AC 기준으로 요구사항 충족 여부 검증**
+       - implement에서 놓쳤을 수 있는 AC 미충족 항목 탐색
     4. Codex CLI로 추가 리뷰 (설치되어 있는 경우):
        - codex에게 동일 파일 분석 요청
     5. 두 외부 LLM의 의견을 비교 종합
@@ -359,6 +376,19 @@ Task tool:
 ### Step 4: 결과 수집
 
 모든 팀메이트의 SendMessage를 수신하여 결과를 통합합니다.
+
+**implement 대비 Delta 표시:**
+
+결과 통합 시 implement에서 이미 검증된 항목과 verify에서 **새로 발견된** 이슈를 구분합니다:
+
+```markdown
+### implement 대비 Delta (verify에서 새로 발견된 이슈)
+| # | 항목 | 문제 | 발견자 |
+|---|------|------|--------|
+| D1 | [항목] | [implement에서 놓친 문제] | qa / critic / llms-reviewer |
+
+> Delta가 없으면 "implement 검증이 충분했습니다. 추가 이슈 없음." 표시
+```
 
 **llms-reviewer 결과 통합 규칙:**
 - Claude 팀메이트(qa/critic)와 동일한 이슈 -> 신뢰도 강화 ("External LLM도 동의")
