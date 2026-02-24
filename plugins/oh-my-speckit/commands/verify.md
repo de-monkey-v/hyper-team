@@ -222,11 +222,11 @@ Skill tool:
 
 | 규모/범위 | 팀 구성 |
 |----------|--------|
-| Small / 빠른 | qa 1명 |
-| Medium / 표준 | qa + critic + llms-reviewer |
-| Large / 완전 | qa + architect + critic + llms-reviewer |
+| 빠른 (최소) | qa + llms-reviewer |
+| 표준 (기본) | qa + critic + llms-reviewer |
+| 완전 | qa + architect + critic + llms-reviewer |
 
-> llms-reviewer는 표준/완전 범위에서만 스폰됩니다 (빠른 검증에서는 생략).
+> llms-reviewer는 모든 범위에서 필수 스폰됩니다.
 
 ### Step 3: 팀메이트 스폰 + 검증 지시 (병렬)
 
@@ -309,24 +309,24 @@ Task tool:
 
 ---
 
-**llms-reviewer 스폰 (표준/완전 범위 — 외부 LLM 코드 리뷰):**
+**llms-reviewer 스폰 (필수 — 외부 LLM 코드 리뷰 + 수정 분석):**
 
 ```
 Task tool:
 - subagent_type: "ai-cli-tools:llms"
 - team_name: "verify-{spec-id}"
 - name: "llms-reviewer"
-- description: "llms-reviewer: 외부 LLM(Gemini/Codex) 코드 리뷰"
+- description: "llms-reviewer: 외부 LLM(Gemini/Codex) 코드 리뷰 + 수정 분석"
 - run_in_background: true
 - prompt: |
-    외부 LLM(Gemini/Codex CLI)을 활용한 코드 리뷰 Second Opinion을 수행합니다.
+    외부 LLM(Gemini/Codex CLI)을 활용한 코드 리뷰 및 수정 분석을 수행합니다.
 
     spec.md 경로: ${PROJECT_ROOT}/.specify/specs/{spec-id}/spec.md
     plan.md 경로: ${PROJECT_ROOT}/.specify/specs/{spec-id}/plan.md
     프로젝트 루트: {PROJECT_ROOT}
     변경 파일 목록: [plan.md에서 추출]
 
-    **수행 작업:**
+    **검증 시 — 코드 리뷰 (즉시 수행):**
     1. spec.md를 Read하여 요구사항 파악
     2. 변경된 파일들을 Read
     3. Gemini CLI로 코드 리뷰:
@@ -335,6 +335,7 @@ Task tool:
     4. Codex CLI로 추가 리뷰 (설치되어 있는 경우):
        - codex에게 동일 파일 분석 요청
     5. 두 외부 LLM의 의견을 비교 종합
+    6. 리더에게 리뷰 결과 보고
 
     **리뷰 초점:**
     - 요구사항 커버리지 갭
@@ -343,8 +344,16 @@ Task tool:
     - 성능 고려사항
     - Claude 팀메이트(qa/critic)가 놓칠 수 있는 문제
 
+    **수정 루프 시 — 수정 분석 (리더 요청 시):**
+    리더가 수정 실패 분석을 요청하면:
+    1. 실패 항목과 관련 코드를 Read
+    2. Gemini/Codex CLI로 실패 원인 분석
+    3. 수정 가이드를 developer에게 직접 SendMessage로 전달
+    4. 리더에게 분석 완료 보고
+
     한국어로 통합 결과를 보고해주세요.
-    완료되면 리더에게 결과를 보고해주세요.
+    코드 리뷰를 즉시 수행하고 리더에게 보고해주세요.
+    수정 분석은 리더의 요청이 있을 때 수행합니다.
 ```
 
 ### Step 4: 결과 수집
@@ -430,7 +439,26 @@ Task tool:
     완료되면 리더에게 결과를 보고해주세요.
 ```
 
-**수정 지시:**
+**수정 지시 Step A: llms-reviewer에게 실패 분석 요청:**
+```
+SendMessage tool:
+- type: "message"
+- recipient: "llms-reviewer"
+- content: |
+    **[수정 루프 — 실패 분석 요청]**
+
+    **실패 항목:**
+    | # | 항목 | 문제 | 위치 |
+    | 1 | [항목] | [문제] | [위치] |
+    | 2 | [항목] | [문제] | [위치] |
+
+    Gemini/Codex CLI로 실패 원인을 분석해주세요.
+    분석 완료 후 developer에게 직접 SendMessage로 수정 가이드를 전달해주세요.
+    리더에게도 분석 결과를 보고해주세요.
+- summary: "수정 실패 분석 요청"
+```
+
+**수정 지시 Step B: developer에게 수정 요청 (llms-reviewer 분석 후):**
 ```
 SendMessage tool:
 - type: "message"
@@ -443,13 +471,16 @@ SendMessage tool:
     | 1 | [항목] | [문제] | [위치] |
     | 2 | [항목] | [문제] | [위치] |
 
+    llms-reviewer(Gemini/Codex)가 실패 원인을 분석했습니다.
+    llms-reviewer의 수정 가이드를 참고하여 수정해주세요.
+
     **수정 원칙:**
     - 원인 분석 후 최소한의 수정
     - 기존 패턴 유지
     - 다른 코드에 영향 최소화
 
     완료 후 변경 내역을 보고해주세요.
-- summary: "검증 실패 수정 요청"
+- summary: "검증 실패 수정 요청 (LLM 분석 포함)"
 ```
 
 #### "하나씩 선택" 모드

@@ -240,15 +240,15 @@ plan.md의 규모(변경 파일 수, Phase 수)를 기반으로 판단:
 
 | 규모 | 기준 | 팀 구성 |
 |------|------|--------|
-| Small | 파일 5개 미만, Phase 3개 이하 | developer + qa |
-| Medium | 파일 5-15개, Phase 4-6개 | developer-1 + developer-2 + qa + llms-advisor |
+| Medium (기본) | 파일 15개 미만, Phase 6개 이하 | developer + qa + llms-advisor |
 | Large | 파일 15개+, Phase 7개+ | architect + developer-1 + developer-2 + qa + llms-advisor |
 
-> llms-advisor는 Medium/Large 프로젝트에서만 스폰됩니다 (Small에서는 생략).
+> Small 카테고리 없음 — Medium이 최소 팀 구성입니다.
+> llms-advisor는 모든 규모에서 필수 스폰됩니다.
 
 ### Step 2.5: Fullstack 프로젝트 감지
 
-Medium/Large에서 developer x2가 필요한 경우, fullstack 프로젝트 여부를 판단:
+Large에서 developer x2가 필요한 경우, fullstack 프로젝트 여부를 판단:
 
 ```
 1. Glob: **/package.json → 여러 개면 monorepo 의심
@@ -271,9 +271,9 @@ Task tool로 팀메이트를 스폰합니다. prompt에 작업 지시를 직접 
 
 | 역할 | 기본 subagent_type | 프레임워크 오버라이드 |
 |------|-------------------|---------------------|
-| developer (Small 단일) | claude-team:implementer | BACKEND: spring→spring-expert, fastapi→fastapi-expert, nestjs→nestjs-expert |
-| developer-1 (Medium+ 복수) | claude-team:implementer | BACKEND: spring→spring-expert, fastapi→fastapi-expert, nestjs→nestjs-expert |
-| developer-2 (Medium+ 복수) | claude-team:implementer | (developer-1과 동일한 오버라이드) |
+| developer (Medium 단일) | claude-team:implementer | BACKEND: spring→spring-expert, fastapi→fastapi-expert, nestjs→nestjs-expert |
+| developer-1 (Large 복수) | claude-team:implementer | BACKEND: spring→spring-expert, fastapi→fastapi-expert, nestjs→nestjs-expert |
+| developer-2 (Large 복수) | claude-team:implementer | (developer-1과 동일한 오버라이드) |
 | frontend-dev | claude-team:frontend | FRONTEND: nextjs→nextjs-expert, nuxt→nuxt-expert, react→react-expert, vue→vue-expert |
 | backend-dev | claude-team:backend | BACKEND: spring→spring-expert, nestjs→nestjs-expert, fastapi→fastapi-expert |
 | qa | claude-team:tester | (오버라이드 없음) |
@@ -287,7 +287,7 @@ Task tool로 팀메이트를 스폰합니다. prompt에 작업 지시를 직접 
 
 **developer 생성 (필수 — non-fullstack):**
 
-**Small (1명):** 번호 없이 `developer`로 스폰
+**Medium (기본, 1명):** 번호 없이 `developer`로 스폰
 
 ```
 Task tool:
@@ -307,7 +307,7 @@ Task tool:
     완료되면 리더에게 변경 파일 목록과 결과를 보고해주세요.
 ```
 
-**Medium+ non-fullstack (2명):** `developer-1`, `developer-2`로 스폰
+**Large non-fullstack (2명):** `developer-1`, `developer-2`로 스폰
 
 ```
 Task tool:
@@ -343,7 +343,7 @@ Task tool:
     완료되면 리더에게 변경 파일 목록과 결과를 보고해주세요.
 ```
 
-**frontend-dev 생성 (fullstack 프로젝트, Medium 이상):**
+**frontend-dev 생성 (fullstack 프로젝트, Large):**
 
 ```
 Task tool:
@@ -365,7 +365,7 @@ Task tool:
     완료되면 리더에게 변경 파일 목록과 결과를 보고해주세요.
 ```
 
-**backend-dev 생성 (fullstack 프로젝트, Medium 이상):**
+**backend-dev 생성 (fullstack 프로젝트, Large):**
 
 ```
 Task tool:
@@ -423,22 +423,23 @@ Task tool:
     완료되면 리더에게 결과를 보고해주세요.
 ```
 
-**llms-advisor 스폰 (Medium/Large — 외부 LLM 구현 자문):**
+**llms-advisor 스폰 (필수 — 외부 LLM 구현 자문 + 에러 분석):**
 
 ```
 Task tool:
 - subagent_type: "ai-cli-tools:llms"
 - team_name: "implement-{spec-id}"
 - name: "llms-advisor"
-- description: "llms-advisor: 외부 LLM(Gemini/Codex) 구현 자문"
+- description: "llms-advisor: 외부 LLM(Gemini/Codex) 구현 자문 + 에러 분석"
 - run_in_background: true
 - prompt: |
-    외부 LLM(Gemini/Codex CLI)을 활용한 구현 사전 분석 및 자문을 수행합니다.
+    외부 LLM(Gemini/Codex CLI)을 활용한 구현 자문 및 에러 분석을 수행합니다.
+    3-phase 라이프사이클로 운영됩니다.
 
     plan.md 경로: ${PROJECT_ROOT}/.specify/specs/{spec-id}/plan.md
     프로젝트 루트: {PROJECT_ROOT}
 
-    **수행 작업:**
+    **Phase 1 — 사전 분석 (즉시 수행):**
     1. plan.md를 Read하여 구현 계획 파악
     2. 수정 대상 기존 코드 파일을 Read
     3. Gemini CLI로 분석:
@@ -447,6 +448,7 @@ Task tool:
        - 따라야 할 코드 패턴 분석
     4. Codex CLI로 추가 분석 (설치되어 있는 경우):
        - 동일 관점에서 교차 검증
+    5. 리더에게 사전 분석 결과 보고
 
     **분석 초점:**
     - 보존해야 할 기존 코드 패턴
@@ -454,8 +456,23 @@ Task tool:
     - 이 유형의 변경에서 흔한 구현 실수
     - 외부 LLM 관점의 구현 팁 및 경고
 
+    **Phase 2 — 에러 분석 (리더 요청 시):**
+    리더가 에러 분석을 요청하면:
+    1. 에러 메시지와 관련 코드를 Read
+    2. Gemini/Codex CLI로 에러 원인 분석
+    3. 수정 가이드를 developer에게 직접 SendMessage로 전달
+    4. 리더에게 분석 완료 보고
+
+    **Phase 3 — 구현 후 리뷰 (리더 요청 시):**
+    리더가 구현 후 리뷰를 요청하면:
+    1. 변경된 파일들을 Read
+    2. Gemini/Codex CLI로 구현 품질 리뷰
+    3. plan.md 대비 구현의 정합성 확인
+    4. 리더에게 리뷰 결과 보고
+
     한국어로 결과를 보고해주세요.
-    구현 시작 전에 리더에게 결과를 보고해주세요.
+    Phase 1을 즉시 수행하고 리더에게 보고해주세요.
+    Phase 2, 3은 리더의 요청이 있을 때 수행합니다.
 ```
 
 ### Step 4: Plan에서 구현 계획 추출 및 Phase Group 분류
@@ -481,7 +498,7 @@ plan.md에서 구현 단계를 추출하고 논리적 그룹으로 분류:
 - 새로 작성: [목록]
 ```
 
-### Step 4.5: llms-advisor 사전 분석 결과 공유 (Medium/Large)
+### Step 4.5: llms-advisor 사전 분석 결과 공유
 
 llms-advisor의 사전 분석 결과가 도착하면, 핵심 팁과 경고를 developer에게 공유합니다:
 
@@ -541,7 +558,7 @@ SendMessage tool:
 ```
 SendMessage tool:
 - type: "message"
-- recipient: "developer" (Small) 또는 "developer-1"/"developer-2" (Medium+ non-fullstack) 또는 "frontend-dev"/"backend-dev" (fullstack)
+- recipient: "developer" (Medium) 또는 "developer-1"/"developer-2" (Large non-fullstack) 또는 "frontend-dev"/"backend-dev" (Large fullstack)
 - content: |
     **Phase Group N 구현 시작**
 
@@ -578,15 +595,59 @@ SendMessage tool:
 -> 다음 Group으로 자동 진행
 ```
 
+**선택적 중간 리뷰 (자동):**
+
+마지막 Group이 아니고 변경 파일 5개 이상이면, llms-advisor에게 중간 품질 체크를 요청합니다:
+
+```
+SendMessage tool:
+- type: "message"
+- recipient: "llms-advisor"
+- content: |
+    **[중간 품질 체크 요청]**
+
+    Group N/{총 Group 수} 완료. 변경 파일 {N}개.
+
+    변경 파일 목록: [developer 보고에서 추출]
+
+    변경된 파일들을 Gemini/Codex로 간단히 확인해주세요:
+    - 명백한 코드 품질 이슈
+    - 다음 Group에 영향을 줄 수 있는 문제
+
+    이슈 발견 시 developer에게 직접 SendMessage로 알려주세요.
+    리더에게도 결과를 보고해주세요.
+- summary: "중간 품질 체크 요청"
+```
+
+> 마지막 Group이거나 변경 파일 5개 미만이면 중간 리뷰를 생략합니다.
+
 **자동 모드 에러 처리:**
 
 | 상황 | 자동 처리 |
 |------|----------|
-| 타입/린트 에러 | developer에게 SendMessage로 수정 요청 (최대 2회) |
-| 테스트 실패 | developer에게 수정 요청 또는 qa에게 테스트 수정 요청 (최대 2회) |
-| 3회 실패 | 중단 후 사용자에게 보고 |
+| 1차 에러 | llms-advisor에게 에러 분석 요청 → 분석 결과와 함께 developer에게 수정 요청 |
+| 2차 에러 | llms-advisor 재분석 → 수정 가이드와 함께 developer에게 재수정 요청 |
+| 3회 실패 | 중단 후 사용자에게 보고 (llms-advisor 분석 이력 포함) |
 
-**에러 수정 요청:**
+**에러 수정 Step 3-A: llms-advisor에게 에러 분석 요청:**
+```
+SendMessage tool:
+- type: "message"
+- recipient: "llms-advisor"
+- content: |
+    **[Phase 2 에러 분석 요청]**
+
+    에러 내용: [에러 메시지]
+    대상 파일: [에러 발생 파일]
+    에러 유형: [타입/린트/테스트 실패]
+
+    Gemini/Codex CLI로 에러 원인을 분석해주세요.
+    분석 완료 후 developer에게 직접 SendMessage로 수정 가이드를 전달해주세요.
+    리더에게도 분석 결과를 보고해주세요.
+- summary: "에러 분석 요청"
+```
+
+**에러 수정 Step 3-B: developer에게 수정 요청 (llms-advisor 분석 후):**
 ```
 SendMessage tool:
 - type: "message"
@@ -597,8 +658,10 @@ SendMessage tool:
     에러 내용: [에러 메시지]
     대상 파일: [에러 발생 파일]
 
-    에러를 수정하고 qa에게 재검증을 요청한 뒤 결과를 보고해주세요.
-- summary: "에러 수정 요청"
+    llms-advisor(Gemini/Codex)가 에러를 분석했습니다.
+    llms-advisor의 수정 가이드를 참고하여 에러를 수정해주세요.
+    수정 후 qa에게 재검증을 요청한 뒤 결과를 보고해주세요.
+- summary: "에러 수정 요청 (LLM 분석 포함)"
 ```
 
 #### 대화형 모드
@@ -676,7 +739,7 @@ SendMessage tool:
 - summary: "통합 테스트 실행 요청"
 ```
 
-### Step 1.5: llms-advisor 구현 후 리뷰 요청 (Medium/Large)
+### Step 1.5: llms-advisor 구현 후 리뷰 요청
 
 구현 완료 후, 통합 테스트와 병렬로 llms-advisor에게 최종 리뷰를 요청합니다:
 
@@ -713,7 +776,7 @@ llms-advisor의 리뷰 결과는 Phase 3 Step 2의 통합 테스트 결과와 �
 | 통합 테스트 | N/N 통과 |
 | 커버리지 | N% |
 
-### External LLM Post-Implementation Review (Medium/Large)
+### External LLM Post-Implementation Review
 | 항목 | Source | 결과 |
 |------|--------|------|
 | 코드 품질 | Gemini | [결과] |
