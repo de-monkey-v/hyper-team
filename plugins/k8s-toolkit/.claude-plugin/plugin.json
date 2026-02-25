@@ -1,0 +1,8 @@
+{
+  "name": "k8s-toolkit",
+  "version": "0.1.0",
+  "description": "Kubernetes, k3s, Helm 종합 인프라 지식 플러그인",
+  "author": { "name": "de-monkey-v" },
+  "license": "MIT",
+  "keywords": ["kubernetes", "k8s", "k3s", "helm", "infrastructure", "devops"]
+}
