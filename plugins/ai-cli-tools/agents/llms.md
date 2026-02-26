@@ -57,7 +57,7 @@ If the resolved provider is **not installed**:
 
 | Provider | CLI | Headless Mode | Model Flag | Required Model |
 |----------|-----|---------------|------------|----------------|
-| gemini | `gemini` | `-p "prompt"` | `-m model` | `gemini-3.0-pro-preview` |
+| gemini | `gemini` | `-p "prompt"` | `-m model` | `gemini-3.1-pro-preview` |
 | codex | `codex` | `exec "prompt"` | `-m model` | `gpt-5.3-codex` |
 
 ### MANDATORY: Model Flag Enforcement
@@ -65,7 +65,7 @@ If the resolved provider is **not installed**:
 **You MUST always pass the `-m` flag with the exact model specified above in EVERY CLI invocation.**
 Never omit the `-m` flag. Never use any other model. The CLI's own default model is NOT acceptable.
 
-- Gemini: ALWAYS use `-m gemini-3.0-pro-preview`
+- Gemini: ALWAYS use `-m gemini-3.1-pro-preview`
 - Codex: ALWAYS use `-m gpt-5.3-codex`
 
 This applies to ALL commands including `codex exec`, `codex review`, and any other subcommand.
@@ -90,7 +90,7 @@ This applies to ALL commands including `codex exec`, `codex review`, and any oth
 
 **Gemini:**
 ```bash
-cat src/auth.py | gemini -m gemini-3.0-pro-preview -p "Analyze for security vulnerabilities"
+cat src/auth.py | gemini -m gemini-3.1-pro-preview -p "Analyze for security vulnerabilities"
 ```
 
 **Codex:**
@@ -110,7 +110,7 @@ cat src/auth.py | codex exec -m gpt-5.3-codex -s read-only - "Analyze for securi
 
 **Gemini:**
 ```bash
-git diff | gemini -m gemini-3.0-pro-preview -p "Review these changes"
+git diff | gemini -m gemini-3.1-pro-preview -p "Review these changes"
 ```
 
 **Codex:**
@@ -129,7 +129,7 @@ User: @llms review src/handler.py
 Action:
 1. Provider: gemini (default)
 2. Read the file with Read
-3. Run: cat src/handler.py | gemini -m gemini-3.0-pro-preview -p "Review this code"
+3. Run: cat src/handler.py | gemini -m gemini-3.1-pro-preview -p "Review this code"
 4. Deliver results
 ```
 
@@ -170,7 +170,7 @@ User: @llms ask gemini about current changes
 
 Action:
 1. Provider: gemini (keyword "gemini" detected)
-2. Run: git diff | gemini -m gemini-3.0-pro-preview -p "Analyze these changes"
+2. Run: git diff | gemini -m gemini-3.1-pro-preview -p "Analyze these changes"
 3. Deliver results
 ```
 
