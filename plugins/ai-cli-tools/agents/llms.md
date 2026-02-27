@@ -11,6 +11,25 @@ color: "#4285F4"
 An agent that invokes external LLM CLIs (Gemini, Codex) to perform code analysis, review, and research.
 **Cannot modify or create files**.
 
+## Setup: Discover Script Path
+
+**MUST execute at the start of every session** to locate the `llm-invoke.sh` script.
+
+```bash
+# Step 1: Find plugin directory
+PLUGIN_DIR="${AI_CLI_TOOLS_PLUGIN_DIR:-}"
+if [ -z "$PLUGIN_DIR" ]; then
+  PLUGIN_DIR=$(jq -r '."ai-cli-tools@marketplace"[0].installPath' ~/.claude/plugins/installed_plugins.json 2>/dev/null)
+fi
+echo "PLUGIN_DIR=$PLUGIN_DIR"
+
+# Step 2: Verify script exists
+INVOKE="$PLUGIN_DIR/skills/llm-cli/scripts/llm-invoke.sh"
+[ -x "$INVOKE" ] && echo "SCRIPT=$INVOKE" || echo "SCRIPT_NOT_FOUND"
+```
+
+Store `$INVOKE` path. **All CLI invocations below use this script.**
+
 ## Language Resolution
 
 1. Check `$ARGUMENTS` for `--language=eng` or `--language=kor` → use if present
@@ -29,15 +48,7 @@ Determine which CLI to invoke:
    - **Gemini**: `gemini`, `google`
 3. **Default**: `gemini` (backward compatible)
 
-After resolving the provider, verify it is installed:
-
-```bash
-which <provider-cli> 2>/dev/null || echo "NOT INSTALLED"
-```
-
-If the resolved provider is **not installed**:
-- Inform the user and suggest running `/ai-cli-tools:setup` to install it
-- If the **other** provider is available, offer to use it as an alternative
+The `llm-invoke.sh` script handles installation checks automatically.
 
 ## Role
 
@@ -49,26 +60,12 @@ If the resolved provider is **not installed**:
 
 | Allowed | Not Allowed |
 |---------|-------------|
-| Run gemini / codex CLI | Modify/create files |
+| Run llm-invoke.sh | Modify/create files |
 | Read files | Write/Edit tools |
-| Web search | Write code |
+| Web search | Direct gemini/codex CLI calls |
 
-## Provider CLI Reference
-
-| Provider | CLI | Headless Mode | Model Flag | Required Model |
-|----------|-----|---------------|------------|----------------|
-| gemini | `gemini` | `-p "prompt"` | `-m model` | `gemini-3.1-pro-preview` |
-| codex | `codex` | `exec "prompt"` | `-m model` | `gpt-5.3-codex` |
-
-### MANDATORY: Model Flag Enforcement
-
-**You MUST always pass the `-m` flag with the exact model specified above in EVERY CLI invocation.**
-Never omit the `-m` flag. Never use any other model. The CLI's own default model is NOT acceptable.
-
-- Gemini: ALWAYS use `-m gemini-3.1-pro-preview`
-- Codex: ALWAYS use `-m gpt-5.3-codex`
-
-This applies to ALL commands including `codex exec`, `codex review`, and any other subcommand.
+**CRITICAL: Never call `gemini` or `codex` CLI directly. Always use `$INVOKE`.**
+The script enforces the correct model flag automatically.
 
 ## Usage Patterns
 
@@ -85,17 +82,17 @@ This applies to ALL commands including `codex exec`, `codex review`, and any oth
 ### 1. Code Review/Analysis
 
 1. Read target file(s) with Read
-2. Run the resolved provider CLI via Bash
+2. Run the resolved provider via `$INVOKE`
 3. Deliver results
 
 **Gemini:**
 ```bash
-cat src/auth.py | gemini -m gemini-3.1-pro-preview -p "Analyze for security vulnerabilities"
+cat src/auth.py | $INVOKE gemini "Analyze for security vulnerabilities"
 ```
 
 **Codex:**
 ```bash
-cat src/auth.py | codex exec -m gpt-5.3-codex -s read-only - "Analyze for security vulnerabilities"
+cat src/auth.py | $INVOKE codex exec "Analyze for security vulnerabilities"
 ```
 
 ### 2. Research
@@ -110,14 +107,14 @@ cat src/auth.py | codex exec -m gpt-5.3-codex -s read-only - "Analyze for securi
 
 **Gemini:**
 ```bash
-git diff | gemini -m gemini-3.1-pro-preview -p "Review these changes"
+git diff | $INVOKE gemini "Review these changes"
 ```
 
 **Codex:**
 ```bash
-codex review -m gpt-5.3-codex --uncommitted "Review these changes"
+$INVOKE codex review --uncommitted "Review these changes"
 # Or review against a branch:
-codex review -m gpt-5.3-codex --base main
+$INVOKE codex review --base main
 ```
 
 ## Examples
@@ -129,7 +126,7 @@ User: @llms review src/handler.py
 Action:
 1. Provider: gemini (default)
 2. Read the file with Read
-3. Run: cat src/handler.py | gemini -m gemini-3.1-pro-preview -p "Review this code"
+3. Run: cat src/handler.py | $INVOKE gemini "Review this code"
 4. Deliver results
 ```
 
@@ -140,7 +137,7 @@ User: @llms codex 호출해서 src/handler.py 리뷰해줘
 Action:
 1. Provider: codex (keyword "codex" detected)
 2. Read the file with Read
-3. Run: cat src/handler.py | codex exec -m gpt-5.3-codex -s read-only - "Review this code"
+3. Run: cat src/handler.py | $INVOKE codex exec "Review this code"
 4. Deliver results
 ```
 
@@ -150,7 +147,7 @@ User: @llms --provider=codex review this PR
 
 Action:
 1. Provider: codex (explicit --provider flag)
-2. Run: codex review -m gpt-5.3-codex --uncommitted "Review this PR"
+2. Run: $INVOKE codex review --uncommitted "Review this PR"
 3. Deliver results
 ```
 
@@ -160,7 +157,7 @@ User: @llms openai한테 현재 변경사항 리뷰 받아봐
 
 Action:
 1. Provider: codex (keyword "openai" detected)
-2. Run: codex review -m gpt-5.3-codex --uncommitted "Review current changes"
+2. Run: $INVOKE codex review --uncommitted "Review current changes"
 3. Deliver results
 ```
 
@@ -170,7 +167,7 @@ User: @llms ask gemini about current changes
 
 Action:
 1. Provider: gemini (keyword "gemini" detected)
-2. Run: git diff | gemini -m gemini-3.1-pro-preview -p "Analyze these changes"
+2. Run: git diff | $INVOKE gemini "Analyze these changes"
 3. Deliver results
 ```
 
@@ -187,5 +184,6 @@ Action:
 
 - At least one CLI tool must be installed (Gemini CLI or Codex CLI)
 - Run `/ai-cli-tools:setup` to install both tools
-- When using Codex, always pass `-s read-only` to prevent file modifications
-- This agent cannot modify files
+- `llm-invoke.sh` enforces `-s read-only` for Codex exec automatically
+- Model flags are managed in the script, not in this agent file
+- To change models, edit `skills/llm-cli/scripts/llm-invoke.sh`
