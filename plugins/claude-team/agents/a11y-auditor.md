@@ -1,7 +1,7 @@
 ---
 name: a11y-auditor
 description: "접근성 감사 전문가 (읽기 전용). WCAG 2.2 AA/AAA 준수 검사, 스크린 리더 호환성, 키보드 네비게이션 (Tab, Focus 관리), 색상 대비 (4.5:1), ARIA 패턴 감사, axe-core/Lighthouse 분석을 담당합니다. 코드 수정 불가."
-model: sonnet
+model: opus
 color: "#3498DB"
 tools: Read, Glob, Grep, Bash, SendMessage
 disallowedTools: Write, Edit

@@ -1,7 +1,7 @@
 ---
 name: reviewer
 description: "코드 리뷰 전문가 (읽기 전용). 코드 품질, 보안, 아키텍처, 성능을 리뷰하고 구조화된 리포트를 제공합니다. 코드 수정 불가."
-model: sonnet
+model: opus
 color: "#8800CC"
 tools: Read, Glob, Grep, Bash, SendMessage
 disallowedTools: Write, Edit

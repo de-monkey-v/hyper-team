@@ -1,7 +1,7 @@
 ---
 name: planner
 description: "제품 기획/요구사항 분석 전문가 (읽기 전용 + 웹 검색). 사용자 요청을 분석하여 US/FR/NFR/EC를 구조화하고, 제품 가치와 MVP 범위를 판단합니다. 코드 수정 불가."
-model: sonnet
+model: opus
 color: "#FF6699"
 tools: Read, Glob, Grep, Bash, WebSearch, WebFetch, SendMessage
 disallowedTools: Write, Edit

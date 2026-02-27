@@ -1,7 +1,7 @@
 ---
 name: state-designer
 description: "상태 관리 설계자 (읽기 전용). 클라이언트/서버 상태 분리, 전역/로컬 상태 전략, TanStack Query/SWR 캐시 무효화, 낙관적 업데이트 패턴, 상태 머신(XState) 설계를 담당합니다. 코드 수정 불가."
-model: sonnet
+model: opus
 color: "#E67E22"
 tools: Read, Glob, Grep, Bash, SendMessage
 disallowedTools: Write, Edit

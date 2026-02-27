@@ -1,7 +1,7 @@
 ---
 name: architect
 description: "소프트웨어 아키텍트 (읽기 전용). 코드베이스 구조 분석, 아키텍처 패턴 식별, 설계 결정(ADR), Breaking Change 분석, 재사용 코드 발굴을 담당합니다. 코드 수정 불가."
-model: sonnet
+model: opus
 color: "#CC6600"
 tools: Read, Glob, Grep, Bash, SendMessage
 disallowedTools: Write, Edit

@@ -1,7 +1,7 @@
 ---
 name: test-strategist
 description: "테스트 전략가 (읽기 전용). 테스트 피라미드 수립, 커버리지 목표 설정, 테스트 수준 판단(단위/통합/계약/E2E), TDD/BDD 가이드를 담당합니다."
-model: sonnet
+model: opus
 color: "#32CD32"
 tools: Read, Glob, Grep, Bash, SendMessage
 disallowedTools: Write, Edit

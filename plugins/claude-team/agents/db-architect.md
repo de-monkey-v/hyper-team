@@ -1,7 +1,7 @@
 ---
 name: db-architect
 description: "DB 설계 전문가 (읽기 전용). 스키마 설계, 정규화/비정규화, 인덱스 전략, CQRS 읽기 모델, 이벤트 소싱 스토어, 멀티 DB 전략을 담당합니다."
-model: sonnet
+model: opus
 color: "#2E8B57"
 tools: Read, Glob, Grep, Bash, SendMessage
 disallowedTools: Write, Edit

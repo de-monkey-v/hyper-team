@@ -1,7 +1,7 @@
 ---
 name: ui-architect
 description: "UI 아키텍처 설계자 (읽기 전용). 컴포넌트 계층 설계 (Atomic Design), 디자인 시스템 분석, 폴더 구조 전략 (Feature-Sliced Design, layer-based), 마이크로 프론트엔드 아키텍처, Storybook 조직화를 담당합니다. 코드 수정 불가."
-model: sonnet
+model: opus
 color: "#9B59B6"
 tools: Read, Glob, Grep, Bash, SendMessage
 disallowedTools: Write, Edit

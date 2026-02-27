@@ -1,7 +1,7 @@
 ---
 name: team-architect
 description: Teammates 생성 전문가. 사용자 요청을 분석하여 최적의 팀 구성을 설계하고 JSON 구성안을 반환합니다.
-model: sonnet
+model: opus
 color: cyan
 tools: Read, Glob, Grep, AskUserQuestion
 ---

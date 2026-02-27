@@ -1,6 +1,6 @@
 ---
 description: 프로젝트 Constitution 초기화/업데이트 (Agent Teams)
-argument-hint: [--update] [--window] [--no-window]
+argument-hint: [--update]
 allowed-tools: Read, Write, Edit, Grep, Glob, Bash, AskUserQuestion, Task, Skill, TaskCreate, TaskUpdate, TaskList, TeamCreate, TeamDelete, SendMessage
 ---
 
@@ -37,11 +37,13 @@ Phase 3: 저장 + 팀 해산 + 완료 안내
 
 | Phase | Step | 필수 액션 | Tool |
 |-------|------|----------|------|
-| 0 | 3.5 | 이전 팀 정리 | Bash |
+| 0 | 3 | 이전 팀 정리 | Bash |
 | 0 | 4 | 기존 태스크 정리 | TaskList, TaskUpdate |
 | 0 | 5 | 태스크 등록 | TaskCreate |
 | 1 | 1 | 팀 생성 | TeamCreate |
-| 1 | 2 | 팀메이트 스폰 (researcher) | Skill (spawn-teammate) |
+| 1 | 2 | role-templates 참조하여 팀 구성 | Skill |
+| 1 | 3 | 팀메이트 스폰 + 분석 지시 (researcher) | Task tool |
+| 1 | 4 | 결과 수집 | SendMessage 수신 |
 | 2 | 2 | 사용자 확인 | AskUserQuestion |
 | 3 | 1 | 사용자 승인 후 파일 저장 | Write |
 | 3 | 3 | 팀 해산 | SendMessage (shutdown), TeamDelete |
@@ -51,6 +53,7 @@ Phase 3: 저장 + 팀 해산 + 완료 안내
 - 리더가 직접 설정 파일 파싱
 - 사용자 승인 없이 파일 저장
 - 전체 문서 출력 (요약만 표시)
+- spawn-teammate Skill 사용
 
 ---
 
@@ -107,23 +110,7 @@ AskUserQuestion:
 
 기존 constitution.md 내용을 표시하고 종료.
 
-### Step 3: 스폰 모드 설정
-
-**Config 읽기:**
-```
-Read tool: ${PROJECT_ROOT}/.specify/config.json
-```
-파일이 없거나 읽기 실패 시 `{}` 으로 간주.
-
-**WINDOW_MODE 결정 (우선순위: CLI > config > default):**
-1. arguments에 `--window` 포함 → WINDOW_MODE = true
-2. arguments에 `--no-window` 포함 → WINDOW_MODE = false
-3. 위 둘 다 없으면 → config의 `spawnWindow` 필드가 `true` → WINDOW_MODE = true
-4. 기본값 → WINDOW_MODE = false
-
-WINDOW_MODE일 때: spawn-teammate에 `--window` 전달
-
-### Step 3.5: Pre-Flight Team Cleanup
+### Step 3: Pre-Flight Team Cleanup
 
 이전 실행에서 남은 팀이 있으면 자동 정리합니다.
 
@@ -203,24 +190,26 @@ Skill tool:
 - skill: "oh-my-speckit:role-templates"
 ```
 
-### Step 3: researcher 스폰
+### Step 3: researcher 스폰 + 분석 지시
 
-```
-Skill tool:
-- skill: "claude-team:spawn-teammate"
-- args: "researcher --team constitution --agent-type claude-team:researcher"
-  (WINDOW_MODE일 때 끝에 --window 추가)
-```
+Task tool로 researcher를 스폰합니다. prompt에 작업 지시를 직접 포함하므로 별도 SendMessage가 불필요합니다.
 
-### Step 4: 분석 지시
+**역할-에이전트 매핑:**
+
+| 역할 | subagent_type |
+|------|--------------|
+| researcher | claude-team:researcher |
 
 #### 초기화 모드
 
 ```
-SendMessage tool:
-- type: "message"
-- recipient: "researcher"
-- content: |
+Task tool:
+- subagent_type: "claude-team:researcher"
+- team_name: "constitution"
+- name: "researcher"
+- description: "researcher: 프로젝트 분석"
+- run_in_background: true
+- prompt: |
     프로젝트를 분석하여 Constitution(기술 원칙 문서)을 작성해주세요.
 
     프로젝트 루트: {PROJECT_ROOT}
@@ -292,16 +281,18 @@ SendMessage tool:
     - 설정 파일 기반 사실만 기록
     - 기존 코드 패턴 관찰 결과도 포함 가능 (단, "코드 관찰" 명시)
     - 완료되면 리더에게 전체 결과를 보고해주세요
-- summary: "researcher 프로젝트 분석 지시"
 ```
 
 #### 업데이트 모드
 
 ```
-SendMessage tool:
-- type: "message"
-- recipient: "researcher"
-- content: |
+Task tool:
+- subagent_type: "claude-team:researcher"
+- team_name: "constitution"
+- name: "researcher"
+- description: "researcher: 업데이트 분석"
+- run_in_background: true
+- prompt: |
     기존 Constitution과 현재 프로젝트 상태를 비교 분석해주세요.
 
     프로젝트 루트: {PROJECT_ROOT}
@@ -335,10 +326,9 @@ SendMessage tool:
 
     변경이 없으면 "NO_CHANGES" 로 보고해주세요.
     완료되면 리더에게 결과를 보고해주세요.
-- summary: "researcher 업데이트 분석 지시"
 ```
 
-### Step 5: 결과 수집
+### Step 4: 결과 수집
 
 researcher의 SendMessage를 수신하여 결과를 정리합니다.
 
@@ -483,7 +473,9 @@ Write tool:
 
 **업데이트 모드 시:** 기존 파일의 "자동 생성" 날짜는 유지하고 "마지막 업데이트" 날짜만 갱신.
 
-### Step 2: 팀메이트 종료
+### Step 2: 팀메이트 종료 + tmux 정리 + 팀 삭제
+
+researcher에게 shutdown_request를 전송합니다:
 
 ```
 SendMessage tool:
@@ -492,7 +484,20 @@ SendMessage tool:
 - content: "Constitution 작성 완료, 팀을 해산합니다."
 ```
 
-### Step 3: 팀 삭제
+shutdown_request 전송 후 tmux pane/window를 정리하고 팀을 삭제합니다:
+
+```bash
+TEAM_NAME="constitution"
+CONFIG="$HOME/.claude/teams/$TEAM_NAME/config.json"
+if [ -f "$CONFIG" ]; then
+  jq -r '.members[] | select(.isActive==true and .tmuxPaneId!=null and .tmuxPaneId!="") | .tmuxPaneId' "$CONFIG" 2>/dev/null | while read -r pane_id; do
+    tmux kill-pane -t "$pane_id" 2>/dev/null || true
+  done
+  tmux list-windows -a -F "#{window_id} #{window_name}" 2>/dev/null | grep "${TEAM_NAME}-" | while read -r wid _; do
+    tmux kill-window -t "$wid" 2>/dev/null || true
+  done
+fi
+```
 
 ```
 TeamDelete tool

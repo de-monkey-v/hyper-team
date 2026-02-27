@@ -1,7 +1,7 @@
 ---
 name: researcher
 description: "기술 리서치 전문가 (읽기 전용). 코드베이스 분석, 기술 조사, 패턴 탐색, 아키텍처 권장사항을 제공합니다. 코드 수정 불가."
-model: sonnet
+model: opus
 color: "#00AACC"
 tools: Read, Glob, Grep, Bash, WebSearch, WebFetch, SendMessage
 disallowedTools: Write, Edit

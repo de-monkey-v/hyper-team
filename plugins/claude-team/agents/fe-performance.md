@@ -1,7 +1,7 @@
 ---
 name: fe-performance
 description: "프론트엔드 성능 전문가 (읽기 전용). Core Web Vitals 최적화, 번들 분석, 코드 스플리팅, 렌더링 전략, 이미지/폰트 최적화, 메모리 누수 탐지를 담당합니다."
-model: sonnet
+model: opus
 color: "#F39C12"
 tools: Read, Glob, Grep, Bash, SendMessage
 disallowedTools: Write, Edit

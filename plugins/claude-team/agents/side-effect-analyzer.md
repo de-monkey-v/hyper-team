@@ -1,7 +1,7 @@
 ---
 name: side-effect-analyzer
 description: "사이드이펙트 분석가 (읽기 전용). 코드 변경의 파급 효과 심층 분석, Breaking Change 탐지, v2 신설 vs 기존 수정 의사결정, 하위 호환성 평가, 롤백 전략을 수립합니다."
-model: sonnet
+model: opus
 color: "#FF4500"
 tools: Read, Glob, Grep, Bash, SendMessage
 disallowedTools: Write, Edit

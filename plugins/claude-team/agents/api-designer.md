@@ -1,7 +1,7 @@
 ---
 name: api-designer
 description: "API 설계 전문가 (읽기 전용). RESTful/GraphQL/gRPC API 설계, OpenAPI 스펙 작성, 버전 전략, 페이지네이션, HATEOAS 패턴을 전담합니다."
-model: sonnet
+model: opus
 color: "#1E90FF"
 tools: Read, Glob, Grep, Bash, SendMessage
 disallowedTools: Write, Edit

@@ -1,7 +1,7 @@
 ---
 name: security-architect
 description: "보안 아키텍처 전문가 (읽기 전용). 인증/인가 설계, OAuth2/OIDC, RBAC/ABAC, API 보안 정책, OWASP 위협 모델링, 감사 로그 설계를 담당합니다."
-model: sonnet
+model: opus
 color: "#DC143C"
 tools: Read, Glob, Grep, Bash, SendMessage
 disallowedTools: Write, Edit

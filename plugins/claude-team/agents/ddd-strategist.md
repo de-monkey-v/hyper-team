@@ -1,7 +1,7 @@
 ---
 name: ddd-strategist
 description: "DDD 설계 전문가 (읽기 전용). Bounded Context, Context Map, Aggregate 경계, Domain Event 흐름, Anti-corruption Layer 등 전략적/전술적 DDD 패턴을 설계합니다."
-model: sonnet
+model: opus
 color: "#8B0000"
 tools: Read, Glob, Grep, Bash, SendMessage
 disallowedTools: Write, Edit
